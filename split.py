@@ -3,53 +3,59 @@ import cv2
 import numpy as np
 import math
 
-# Open an image here
-fname = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
-img = cv2.imread(fname)
 
-# Let's build a simple mask to separate pieces from background
-# just by checking if pixel is in range of some colours
-mask = cv2.inRange(img,
-                   np.array([0, 0, 190], dtype=img.dtype),
-                   np.array([200, 100, 255], dtype=img.dtype))
-mask = cv2.bitwise_not(mask)
+def open_image_and_separate_bg(fname):
+    img = cv2.imread(fname)
 
-# Init kernel for dilate/erode
-kernel = np.ones((5, 5), np.uint8)
-# optional blur of mask
-# mask = cv2.medianBlur(mask, 5)
+    # Let's build a simple mask to separate pieces from background
+    # just by checking if pixel is in range of some colours
+    mask = cv2.inRange(img,
+                       np.array([0, 0, 165], dtype=img.dtype),
+                       np.array([200, 100, 255], dtype=img.dtype))
+    mask = cv2.bitwise_not(mask)
 
-# Clean noise on background
-mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-# Clean noise inside pieces
-mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    # Init kernel for dilate/erode
+    kernel = np.ones((5, 5), np.uint8)
+    # optional blur of mask
+    # mask = cv2.medianBlur(mask, 5)
 
-# Apply mask to image
-img = cv2.bitwise_and(img, img, mask=mask)
+    # Clean noise on background
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    # Clean noise inside pieces
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-# Add some borders (just in case)
-img = cv2.copyMakeBorder(img, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
-                         value=[0, 0, 0])
-mask = cv2.copyMakeBorder(mask, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
-                          value=[0, 0, 0])
+    # Apply mask to image
+    img = cv2.bitwise_and(img, img, mask=mask)
 
-# Write original image with no background for debug purposes
-cv2.imwrite("debug/mask.tif", mask)
+    # Add some borders (just in case)
+    img = cv2.copyMakeBorder(img, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
+                             value=[0, 0, 0])
+    mask = cv2.copyMakeBorder(mask, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
+                              value=[0, 0, 0])
 
-# Find contours of pieces
-contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # Write original image with no background for debug purposes
+    cv2.imwrite("debug/mask.tif", mask)
 
-height, width, channels = img.shape
+    return img, mask
 
-# Walk through contrours to extract pieces and unify the rotation
-for i, c in enumerate(contours):
+
+def extract_piece_and_features(img, c, name):
+    height, width, channels = img.shape
+
     # bounding rect of currrent contour
     r_x, r_y, r_w, r_h = cv2.boundingRect(c)
+    area = cv2.contourArea(c)
 
     # filter out too small fragments
-    if r_w <= 10 or r_h <= 10 or cv2.contourArea(c) < 100:
-        print("Skipping piece #%s as too small" % i)
-        continue
+    if r_w <= 10 or r_h <= 10 or area < 100:
+        print("Skipping piece #%s as too small" % name)
+        return
+
+    hull = cv2.convexHull(c)
+    hull_area = cv2.contourArea(hull)
+    solidity = float(area) / hull_area
+    if solidity < 0.75:
+        print("Piece #%s looks suspicious" % name)
 
     # position of rect of min area.
     # this will provide us angle to straighten image
@@ -94,11 +100,25 @@ for i, c in enumerate(contours):
 
     # Crop it
     img_roi = cv2.warpAffine(img_roi, M, bbox)
-    cv2.imwrite("pieces/%s.tif" % i, img_roi)
+    cv2.imwrite("pieces/%s.tif" % name, img_roi)
 
-# Another useful debug: drawing contours and their min area boxes
-cv2.drawContours(img, contours, -1, (0, 255, 0), 2)
-boxes = map(cv2.minAreaRect, contours)
-boxes2draw = map(lambda b: np.int0(cv2.cv.BoxPoints(b)), boxes)
-cv2.drawContours(img, boxes2draw, -1, (0, 0, 255), 2)
-cv2.imwrite("debug/out_with_contours.tif", img)
+if __name__ == '__main__':
+    # Open an image here
+    fname = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
+
+    img, mask = open_image_and_separate_bg(fname)
+
+    # Find contours of pieces
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+
+    # Walk through contrours to extract pieces and unify the rotation
+    for i, c in enumerate(contours):
+        extract_piece_and_features(img, c, i)
+
+    # Another useful debug: drawing contours and their min area boxes
+    cv2.drawContours(img, contours, -1, (0, 255, 0), 2)
+    boxes = map(cv2.minAreaRect, contours)
+    boxes2draw = map(lambda b: np.int0(cv2.cv.BoxPoints(b)), boxes)
+    cv2.drawContours(img, boxes2draw, -1, (0, 0, 255), 2)
+    cv2.imwrite("debug/out_with_contours.tif", img)
