@@ -52,3 +52,10 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# Project related stuff
+venv
+.DS_Store
+# Full sized puzzle sources is to big for repo
+src/puzzle.tif
+debug/*.tif
+pieces/*.tif
