@@ -43,12 +43,13 @@ height, width, channels = img.shape
 
 # Walk through contrours to extract pieces and unify the rotation
 for i, c in enumerate(contours):
-    if cv2.contourArea(c) < 100:
-        print("Skipping piece #%s as too small" % i)
-        continue
-
     # bounding rect of currrent contour
     r_x, r_y, r_w, r_h = cv2.boundingRect(c)
+
+    # filter out too small fragments
+    if r_w <= 10 or r_h <= 10 or cv2.contourArea(c) < 100:
+        print("Skipping piece #%s as too small" % i)
+        continue
 
     # position of rect of min area.
     # this will provide us angle to straighten image
@@ -76,8 +77,6 @@ for i, c in enumerate(contours):
     # Add alpha layer and set it to the mask
     img_roi = cv2.cvtColor(img_roi, cv2.cv.CV_BGR2BGRA)
     img_roi[:, :, 3] = mask[:, :, 0]
-    # alternative way of doing that, but slightly slower
-    # cv2.mixChannels([img_roi, mask], [img_roi], [0, 0, 1, 1, 2, 2, 4, 3])
 
     # Straighten it
     M = cv2.getRotationMatrix2D(box_center, angle, 1)
