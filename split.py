@@ -39,10 +39,14 @@ cv2.imwrite("debug/mask.tif", mask)
 # Find contours of pieces
 contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-width, height, channels = img.shape
+height, width, channels = img.shape
 
 # Walk through contrours to extract pieces and unify the rotation
 for i, c in enumerate(contours):
+    if cv2.contourArea(c) < 100:
+        print("Skipping piece #%s as too small" % i)
+        continue
+
     # bounding rect of currrent contour
     r_x, r_y, r_w, r_h = cv2.boundingRect(c)
 
@@ -63,16 +67,22 @@ for i, c in enumerate(contours):
     x2 = math.ceil(box_center[0] + bbox[0] / 2)
 
     # A mask we use to show only piece we are currently working on
-    mask = np.zeros([width, height, 1], dtype=np.uint8)
+    mask = np.zeros([height, width, 1], dtype=np.uint8)
     cv2.drawContours(mask, [c], -1, 255, cv2.cv.CV_FILLED)
 
-    # applying mask to original image
+    # apply mask to original image
     img_roi = cv2.bitwise_and(img, img, mask=mask)
 
-    # Rotating it
+    # Add alpha layer and set it to the mask
+    img_roi = cv2.cvtColor(img_roi, cv2.cv.CV_BGR2BGRA)
+    img_roi[:, :, 3] = mask[:, :, 0]
+    # alternative way of doing that, but slightly slower
+    # cv2.mixChannels([img_roi, mask], [img_roi], [0, 0, 1, 1, 2, 2, 4, 3])
+
+    # Straighten it
     M = cv2.getRotationMatrix2D(box_center, angle, 1)
-    # Croping it
-    img_roi = cv2.warpAffine(img_roi, M, (height, width))[y1:y2, x1:x2]
+    # Crop it
+    img_roi = cv2.warpAffine(img_roi, M, (width, height))[y1:y2, x1:x2]
 
     cv2.imwrite("pieces/%s.tif" % i, img_roi)
 

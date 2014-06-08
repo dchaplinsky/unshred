@@ -5,7 +5,9 @@ Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchall
 ### What it can (at the moment)
  * Detect and remove background
  * Find pieces and separate them
+ * Ignore crapy pieces (too small at the moment)
  * Detect pieces orientation and unify them (straighten and make vertical)
+ * Save pieces with alpha channel
  * Output some useful debug info
 
 ### Requirements
