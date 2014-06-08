@@ -20,4 +20,4 @@ I've used versions from [homebrew](http://brew.sh/). I think any 2.* OpenCV vers
 I've included cropped version of #1 of Darpa Shredder Challenge for reference. For original files please visit [their website](http://archive.darpa.mil/shredderchallenge/Download.html)
 
 ### Further reading
-I've grabbed and implemented first steps [of solution](http://web.archive.org/web/20130614211215/http://www.marcnewlin.com/2011/12/you-should-probably-start-burning-your_02.html) from wasabi team. Unfortunatelly, original page is not available anymore, so I put a link to archived version of it.
+I've grabbed and implemented first steps [of solution](http://www.marcnewlin.me/2011/12/you-should-probably-start-burning-your_02.html) from wasabi team.
