@@ -63,26 +63,37 @@ for i, c in enumerate(contours):
     # Coords of region of interest using which we should crop piece after
     # rotation
     y1 = math.floor(box_center[1] - bbox[1] / 2)
-    y2 = math.ceil(box_center[1] + bbox[1] / 2)
     x1 = math.floor(box_center[0] - bbox[0] / 2)
-    x2 = math.ceil(box_center[0] + bbox[0] / 2)
+    bbox = tuple(map(int, map(math.ceil, bbox)))
 
     # A mask we use to show only piece we are currently working on
     mask = np.zeros([height, width, 1], dtype=np.uint8)
     cv2.drawContours(mask, [c], -1, 255, cv2.cv.CV_FILLED)
 
     # apply mask to original image
-    img_roi = cv2.bitwise_and(img, img, mask=mask)
+    img_crp = img[r_y:r_y + r_h, r_x:r_x + r_w]
+    mask = mask[r_y:r_y + r_h, r_x:r_x + r_w]
+    img_roi = cv2.bitwise_and(img_crp, img_crp, mask=mask)
 
     # Add alpha layer and set it to the mask
     img_roi = cv2.cvtColor(img_roi, cv2.cv.CV_BGR2BGRA)
     img_roi[:, :, 3] = mask[:, :, 0]
 
     # Straighten it
-    M = cv2.getRotationMatrix2D(box_center, angle, 1)
-    # Crop it
-    img_roi = cv2.warpAffine(img_roi, M, (width, height))[y1:y2, x1:x2]
+    # Because we crop original image before rotation we save us some memory
+    # and a lot of time but we need to adjust coords of the center of
+    # new min area rect
+    M = cv2.getRotationMatrix2D((box_center[0] - r_x,
+                                 box_center[1] - r_y), angle, 1)
 
+    # And translate an image a bit to make it fit to the bbox again.
+    # This is done with direct editing of the transform matrix.
+    # (Wooohoo, I know matrix-fu)
+    M[0][2] += r_x - x1
+    M[1][2] += r_y - y1
+
+    # Crop it
+    img_roi = cv2.warpAffine(img_roi, M, bbox)
     cv2.imwrite("pieces/%s.tif" % i, img_roi)
 
 # Another useful debug: drawing contours and their min area boxes
