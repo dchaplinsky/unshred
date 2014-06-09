@@ -98,9 +98,45 @@ def extract_piece_and_features(img, c, name):
     M[0][2] += r_x - x1
     M[1][2] += r_y - y1
 
-    # Crop it
+    # Apply rotation/transform/crop
     img_roi = cv2.warpAffine(img_roi, M, bbox)
     cv2.imwrite("pieces/%s.tif" % name, img_roi)
+
+    # FEATURES MAGIC BELOW
+    #
+    # Get our mask/contour back after the trasnform
+    _, _, _, mask = cv2.split(img_roi)
+    contours, _ = cv2.findContours(mask.copy(), cv2.RETR_TREE,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) != 1:
+        print("Piece #%s has strange contours after transform" % name)
+
+    mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGR)
+    cv2.drawContours(mask, contours, -1, (0, 255, 0), 2)
+
+    cnt = contours[0]
+
+    if mask.shape[0] / float(mask.shape[1]) >= 2.7:
+        hull = cv2.convexHull(cnt, returnPoints=False)
+        defects = cv2.convexityDefects(cnt, hull)
+
+        for i in range(defects.shape[0]):
+            s, e, f, d = defects[i, 0]
+            start = tuple(cnt[s][0])
+            end = tuple(cnt[e][0])
+            far = tuple(cnt[f][0])
+
+            cv2.line(mask, start, end, [255, 0, 255], 2)
+
+            if d / 256. > 7:
+                y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
+                if float(y_dist) / mask.shape[0] < 0.1:
+                    if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
+                        cv2.circle(mask, far, 5, [0, 0, 255], -1)
+
+    cv2.imwrite("pieces/%s_mask.tif" % name, mask)
+
 
 if __name__ == '__main__':
     # Open an image here
