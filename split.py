@@ -112,28 +112,46 @@ def extract_piece_and_features(img, c, name):
     if len(contours) != 1:
         print("Piece #%s has strange contours after transform" % name)
 
+    # Let's also detect 25 of most outstanding corners of the contour.
+    corners = cv2.goodFeaturesToTrack(mask, 25, 0.01, 10)
+    corners = np.int0(corners)
+
+    # Draw contours for debug purposes
     mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGR)
-    cv2.drawContours(mask, contours, -1, (0, 255, 0), 2)
+    cv2.drawContours(mask, contours, -1, (255, 0, 255), 2)
+
+    # And put corners on top
+    for i in corners:
+        x, y = i.ravel()
+        cv2.circle(mask, (x, y), 3, [0, 255, 0], -1)
 
     cnt = contours[0]
 
+    # Let's find features that will help us to determine top side of the piece
     if mask.shape[0] / float(mask.shape[1]) >= 2.7:
         hull = cv2.convexHull(cnt, returnPoints=False)
         defects = cv2.convexityDefects(cnt, hull)
 
+        # Check for convex defects to see if we can find a trace of a
+        # shredder cut which is usually on top of the piece.
         for i in range(defects.shape[0]):
             s, e, f, d = defects[i, 0]
-            start = tuple(cnt[s][0])
-            end = tuple(cnt[e][0])
             far = tuple(cnt[f][0])
 
-            cv2.line(mask, start, end, [255, 0, 255], 2)
-
+            # if convex defect is big enough
             if d / 256. > 7:
+                # And lays at the top or bottom of the piece
                 y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
                 if float(y_dist) / mask.shape[0] < 0.1:
+                    # and more or less is in the center
                     if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
                         cv2.circle(mask, far, 5, [0, 0, 255], -1)
+
+        # Also top and bottom points on the contour
+        topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+        bottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
+        cv2.circle(mask, topmost, 3, [0, 255, 255], -1)
+        cv2.circle(mask, bottommost, 3, [0, 255, 255], -1)
 
     cv2.imwrite("pieces/%s_mask.tif" % name, mask)
 

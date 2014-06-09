@@ -8,6 +8,7 @@ Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchall
  * Ignore crapy pieces (too small at the moment)
  * Detect pieces orientation and unify them (straighten and make vertical)
  * Save pieces with alpha channel
+ * Detects some features to be used for future matching: top side of the piece, corners of contour, top/bottommost points
  * Output some useful debug info
 
 ### Requirements
