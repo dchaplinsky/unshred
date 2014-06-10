@@ -2,17 +2,131 @@ import sys
 import cv2
 import numpy as np
 import math
+# import random
+
+backgrounds = [
+    # DARPA SHRED task #1
+    [[np.array([0, 0, 165]), np.array([200, 100, 255])]],
+    # Pink
+    [[np.array([160, 120, 230]), np.array([200, 210, 255])],
+     [np.array([210, 185, 245]), np.array([235, 195, 255])],
+     ],
+]
+
+
+def replace_scanner_background(img):
+    # Here we are trying to find scanner background
+    # (gray borders around colored sheet where shreds are glued)
+    # Problem here is that colored sheet might have borders of different sizes
+    # on different sides of it and we don't know the color of the sheet.
+    # Also sheets isn't always has perfectly straight edges or rotated slightly
+    # against edges of the scanner
+    # Idea is relatively simple:
+
+    # Convert image to LAB and grab A and B channels.
+    fimg = cv2.cvtColor(img, cv2.cv.CV_BGR2Lab)
+    _, a_channel, b_channel = cv2.split(fimg)
+
+    def try_method(fimg, border, aggressive=True):
+        fimg = cv2.copyMakeBorder(fimg, 5, 5, 5, 5, cv2.BORDER_CONSTANT,
+                                  value=border)
+
+        if aggressive:
+            cv2.floodFill(fimg, None, (10, 10), 255, 1, 1)
+        else:
+            cv2.floodFill(fimg, None, (10, 10), 255, 2, 2,
+                          cv2.FLOODFILL_FIXED_RANGE)
+
+        _, fimg = cv2.threshold(fimg, 254, 255, cv2.THRESH_BINARY)
+
+        hist = cv2.calcHist([fimg], [0], None, [2], [0, 256])
+        return fimg, hist
+
+    options = [
+        [a_channel, 127],
+        [b_channel, 134],
+        [a_channel, 127, False],
+        [b_channel, 134, False],
+    ]
+
+    # And then try to add a border of predefined color around each channel
+    # and flood fill scanner scanner background starting from most
+    # aggressive flood fill settings to least aggressive.
+    for i, opt in enumerate(options):
+        fimg, hist = try_method(*opt)
+        # First setting that doesn't flood that doesn't hurt colored sheet
+        # to badly wins.
+        if hist[1] < (hist[0] + hist[1]) * 0.2:
+            break
+
+    # Then we dilate it a bit.
+    fimg = cv2.morphologyEx(fimg, cv2.MORPH_DILATE, np.ones((5, 5), np.uint8),
+                            iterations=2)
+    fimg = fimg[5:-5, 5:-5]
+
+    # Searching for a biggest outter contour
+    contours, _ = cv2.findContours(cv2.bitwise_not(fimg), cv2.RETR_EXTERNAL,
+                                   cv2.CHAIN_APPROX_SIMPLE)
+    main_contour = np.array(map(cv2.contourArea, contours)).argmax()
+
+    # build a convex hull for it
+    hull = cv2.convexHull(contours[main_contour])
+
+    # And make a mask out of it.
+    cv2.fillPoly(fimg, [hull], 0)
+
+    # Done. Piece of cake.
+    return fimg
+    # Cannot say I'm satisfied with algo but using grabcut here seems too
+    # expensive. Also it was a lot of fun to build it.
+
+
+def find_appropriate_mask(img):
+    # Let's build a simple mask to separate pieces from background
+    # just by checking if pixel is in range of some colours
+    m = 0
+    res = None
+
+    # Here we calculate mask to separate background of the scanner
+    scanner_bg = replace_scanner_background(img)
+
+    # And here we are trying to check different ranges for different
+    # background to find the winner.
+    for bg in backgrounds:
+        mask = np.zeros(img.shape[:2], np.uint8)
+
+        for rng in bg:
+            # As each pre-defined background is described by a list of
+            # color ranges we are summing up their masks
+            mask = cv2.bitwise_or(mask, cv2.inRange(img, rng[0], rng[1]))
+
+        hist = cv2.calcHist([mask], [0], None, [2], [0, 256])
+        # And here we are searching for a biggest possible mask across all
+        # possible predefined backgrounds
+        if hist[1] > m:
+            m = hist[1]
+            res = mask
+
+    # then we remove scanner background
+    res = cv2.bitwise_or(scanner_bg, res)
+
+    bgdModel = np.zeros((1, 65), np.float64)
+    fgdModel = np.zeros((1, 65), np.float64)
+
+    # and run grabcut algo against the seed mask to refine background
+    # separation
+    res = cv2.medianBlur(res, 5)
+    mask = np.where((res == 255), cv2.GC_BGD, cv2.GC_PR_FGD).astype('uint8')
+    cv2.grabCut(img, mask, None, bgdModel, fgdModel, 2, cv2.GC_INIT_WITH_MASK)
+    res = np.where((mask == 2) | (mask == 0), 255, 0).astype('uint8')
+
+    return cv2.bitwise_not(res)
 
 
 def open_image_and_separate_bg(fname):
     img = cv2.imread(fname)
 
-    # Let's build a simple mask to separate pieces from background
-    # just by checking if pixel is in range of some colours
-    mask = cv2.inRange(img,
-                       np.array([0, 0, 165], dtype=img.dtype),
-                       np.array([200, 100, 255], dtype=img.dtype))
-    mask = cv2.bitwise_not(mask)
+    mask = find_appropriate_mask(img)
 
     # Init kernel for dilate/erode
     kernel = np.ones((5, 5), np.uint8)
@@ -114,7 +228,10 @@ def extract_piece_and_features(img, c, name):
 
     # Let's also detect 25 of most outstanding corners of the contour.
     corners = cv2.goodFeaturesToTrack(mask, 25, 0.01, 10)
-    corners = np.int0(corners)
+    corners = np.int0(corners) if corners is not None else []
+
+    edges = cv2.Canny(img_roi[:, :, 2], 100, 200)
+    cv2.imwrite("pieces/%s_edges.tif" % name, edges)
 
     # Draw contours for debug purposes
     mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGR)
@@ -162,7 +279,7 @@ if __name__ == '__main__':
 
     img, mask = open_image_and_separate_bg(fname)
 
-    # Find contours of pieces
+    # # Find contours of pieces
     contours, _ = cv2.findContours(mask, cv2.RETR_TREE,
                                    cv2.CHAIN_APPROX_SIMPLE)
 
