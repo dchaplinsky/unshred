@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% macro render_dict_as_table(data) %}
+    <table class="sTable" width="100%">
+        <tbody>
+            {% for key, value in data.items()|sort %}
+            <tr>
+                <td><strong>{{ key }}</strong></td>
+                {% if value.__class__.__name__ == "dict" %}
+                <td>{{ render_dict_as_table(value) }}</td>
+                {% else %}
+                <td>{{ value }}</td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endmacro %}
+
+{% block title %}Page "{{ out_dir_name }}"{% endblock %}
+
+{% block css %}
+    <link href="../static/base.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+    <img src="{{ img_name }}" usemap="#shreds_map" alt="" />
+    <map name="shreds_map">
+        {% for c in contours %}
+        <area shape="poly" coords="{{ c.simplified_contour }}"
+            class="popup-with-zoom-anim" 
+            title="{{ c.name }}"
+            href="#shred-{{ c.name }}" />
+
+        <div class="zoom-anim-dialog mfp-hide small-dialog" id="shred-{{ c.name }}">
+            <div class="shed-img"><img data-src="{{ c.piece_fname|replace(export_dir + "/", "") }}" data-xray="{{ c.features_fname|replace(export_dir + "/", "") }}"/></div>
+            <div class="shed-features">
+                <h3>Page #{{ out_dir_name }} / piece #{{ c.name }}</h3>
+                {{ render_dict_as_table(c.features) }}
+            </div>
+            <div class="clearfix"></div>
+        </div>
+        {% endfor %}
+    </map>
+
+    <script src="../static/jquery.min.js"></script>
+    <script src="../static/jquery.rwdImageMaps.min.js"></script>
+    <script src="../static/jquery.magnific-popup.min.js"></script>
+    <script language="javascript">
+        $(function(e) {
+            $('img[usemap]').rwdImageMaps();
+
+            $(".shed-img img").hover(
+                function(){
+                    $(this).attr("src", $(this).data("xray"));
+                },
+                function(){
+                    $(this).attr("src", $(this).data("src"));
+                }
+            );
+
+            $('.popup-with-zoom-anim').magnificPopup({
+                type: 'inline',
+
+                fixedContentPos: false,
+                fixedBgPos: true,
+                overflowY: 'auto',
+                closeBtnInside: true,
+                preloader: false,
+             
+                midClick: true,
+                removalDelay: 100,
+                mainClass: 'my-mfp-zoom-in',
+                callbacks: {
+                    open: function() {
+                        var img = this.content.find("img");
+
+                        img.attr("src", img.data("src"));
+                    }
+                }
+            });
+        });
+    </script>
+{% endblock %}

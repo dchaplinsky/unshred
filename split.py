@@ -1,8 +1,37 @@
+import os
+import os.path
+import shutil
 import sys
 import cv2
 import numpy as np
 import math
-# import random
+from glob import glob
+from jinja2 import FileSystemLoader, Environment
+
+out_format = "png"
+# TODO: refactor to avoid using global variable
+out_dir_name = "test"
+
+env = Environment(loader=FileSystemLoader("templates"))
+
+
+def save_image(fname, img, format=None):
+    full_out_dir, fname = os.path.split(
+        os.path.join("out", out_dir_name, fname))
+
+    try:
+        os.makedirs(full_out_dir)
+    except OSError:
+        pass
+
+    if format is None:
+        format = out_format
+
+    fname = "%s/%s.%s" % (full_out_dir, fname, format)
+    cv2.imwrite(fname, img)
+
+    return fname
+
 
 backgrounds = [
     # DARPA SHRED task #1
@@ -55,7 +84,7 @@ def replace_scanner_background(img):
     for i, opt in enumerate(options):
         fimg, hist = try_method(*opt)
         # First setting that doesn't flood that doesn't hurt colored sheet
-        # to badly wins.
+        # too badly wins.
         if hist[1] < (hist[0] + hist[1]) * 0.2:
             break
 
@@ -73,7 +102,9 @@ def replace_scanner_background(img):
     hull = cv2.convexHull(contours[main_contour])
 
     # And make a mask out of it.
-    cv2.fillPoly(fimg, [hull], 0)
+    fimg = np.zeros(fimg.shape[:2], np.uint8)
+    cv2.fillPoly(fimg, [hull], 255)
+    fimg = cv2.bitwise_not(fimg)
 
     # Done. Piece of cake.
     return fimg
@@ -123,9 +154,7 @@ def find_appropriate_mask(img):
     return cv2.bitwise_not(res)
 
 
-def open_image_and_separate_bg(fname):
-    img = cv2.imread(fname)
-
+def open_image_and_separate_bg(img):
     mask = find_appropriate_mask(img)
 
     # Init kernel for dilate/erode
@@ -140,12 +169,6 @@ def open_image_and_separate_bg(fname):
 
     # Apply mask to image
     img = cv2.bitwise_and(img, img, mask=mask)
-
-    # Add some borders (just in case)
-    img = cv2.copyMakeBorder(img, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
-                             value=[0, 0, 0])
-    mask = cv2.copyMakeBorder(mask, 10, 10, 10, 10, cv2.BORDER_CONSTANT,
-                              value=[0, 0, 0])
 
     # Write original image with no background for debug purposes
     cv2.imwrite("debug/mask.tif", mask)
@@ -163,7 +186,11 @@ def extract_piece_and_features(img, c, name):
     # filter out too small fragments
     if r_w <= 10 or r_h <= 10 or area < 100:
         print("Skipping piece #%s as too small" % name)
-        return
+        return None
+
+    # Generating simplified contour to use it in html
+    epsilon = 0.01 * cv2.arcLength(c, True)
+    simplified_contour = cv2.approxPolyDP(c, epsilon, True)
 
     hull = cv2.convexHull(c)
     hull_area = cv2.contourArea(hull)
@@ -214,7 +241,7 @@ def extract_piece_and_features(img, c, name):
 
     # Apply rotation/transform/crop
     img_roi = cv2.warpAffine(img_roi, M, bbox)
-    cv2.imwrite("pieces/%s.tif" % name, img_roi)
+    piece_fname = save_image("pieces/%s" % name, img_roi, "png")
 
     # FEATURES MAGIC BELOW
     #
@@ -231,16 +258,17 @@ def extract_piece_and_features(img, c, name):
     corners = np.int0(corners) if corners is not None else []
 
     edges = cv2.Canny(img_roi[:, :, 2], 100, 200)
-    cv2.imwrite("pieces/%s_edges.tif" % name, edges)
+    save_image("pieces/%s_edges" % name, edges)
 
     # Draw contours for debug purposes
-    mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGR)
-    cv2.drawContours(mask, contours, -1, (255, 0, 255), 2)
+    mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGRA)
+    mask[:, :, 3] = mask[:, :, 0]
+    cv2.drawContours(mask, contours, -1, (255, 0, 255, 255), 2)
 
     # And put corners on top
     for i in corners:
         x, y = i.ravel()
-        cv2.circle(mask, (x, y), 3, [0, 255, 0], -1)
+        cv2.circle(mask, (x, y), 3, (0, 255, 0, 255), -1)
 
     cnt = contours[0]
 
@@ -262,34 +290,130 @@ def extract_piece_and_features(img, c, name):
                 if float(y_dist) / mask.shape[0] < 0.1:
                     # and more or less is in the center
                     if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
-                        cv2.circle(mask, far, 5, [0, 0, 255], -1)
+                        cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
 
-        # Also top and bottom points on the contour
-        topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
-        bottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
-        cv2.circle(mask, topmost, 3, [0, 255, 255], -1)
-        cv2.circle(mask, bottommost, 3, [0, 255, 255], -1)
+    # Also top and bottom points on the contour
+    topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+    bottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
+    cv2.circle(mask, topmost, 3, [0, 255, 255, 255], -1)
+    cv2.circle(mask, bottommost, 3, [0, 255, 255, 255], -1)
 
-    cv2.imwrite("pieces/%s_mask.tif" % name, mask)
+    features_fname = save_image("pieces/%s_mask" % name, mask, "png")
+    return {
+        "features": {
+            "area": area,
+            "angle": angle,
+            "ratio": mask.shape[0] / float(mask.shape[1]),
+            "solidity": solidity,
+        },
+        "contour": c,
+        "name": name,
+        "piece_fname": piece_fname,
+        "features_fname": features_fname,
+        "simplified_contour": simplified_contour,
+    }
 
 
-if __name__ == '__main__':
-    # Open an image here
-    fname = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
+def overlay_contours(img, contours):
+    # Draw contours on top of image with a nice yellow tint
+    overlay = np.zeros(img.shape, np.uint8)
+    contours = map(lambda x: x["contour"], contours)
 
-    img, mask = open_image_and_separate_bg(fname)
+    cv2.fillPoly(overlay, contours, [104, 255, 255])
+    img = img.copy() + overlay
 
-    # # Find contours of pieces
+    cv2.drawContours(img, contours, -1, [0, 180, 0], 2)
+    return img
+
+
+def convert_poly_to_string(poly):
+    # Helper to convert openCV contour to a string with coordinates
+    # that is recognizible by html area tag
+    # TODO: Jinja2 filter
+    return ",".join(map(lambda x: ",".join(map(str, x[0])), poly))
+
+
+def export_results_as_html(path_to_image, contours):
+    # Export one processes page as html for further review
+    tpl = env.get_template("page.html")
+
+    for c in contours:
+        c["simplified_contour"] = convert_poly_to_string(
+            c["simplified_contour"])
+
+        # Slight pre-processing of the features of each piece
+        c["features"]["angle"] = "%8.1f&deg;" % c["features"]["angle"]
+        c["features"]["ratio"] = "%8.2f" % c["features"]["ratio"]
+        c["features"]["solidity"] = "%8.2f" % c["features"]["solidity"]
+
+    export_dir, img_name = os.path.split(path_to_image)
+
+    with open("%s/index.html" % export_dir, "w") as fp:
+        fp.write(tpl.render(
+            img_name=img_name,
+            contours=contours,
+            export_dir=export_dir,
+            out_dir_name=out_dir_name
+        ))
+
+
+def process_file(fname):
+    # Process single file
+    orig_img = cv2.imread(fname)
+
+    processed_img, mask = open_image_and_separate_bg(orig_img)
+
+    # Find contours of pieces
     contours, _ = cv2.findContours(mask, cv2.RETR_TREE,
                                    cv2.CHAIN_APPROX_SIMPLE)
 
-    # Walk through contrours to extract pieces and unify the rotation
+    # Walk through contours to extract pieces and unify the rotation
+    resulting_contours = []
     for i, c in enumerate(contours):
-        extract_piece_and_features(img, c, i)
+        cnt_features = extract_piece_and_features(processed_img, c, i)
+        if cnt_features is not None:
+            resulting_contours.append(cnt_features)
 
-    # Another useful debug: drawing contours and their min area boxes
-    cv2.drawContours(img, contours, -1, (0, 255, 0), 2)
-    boxes = map(cv2.minAreaRect, contours)
-    boxes2draw = map(lambda b: np.int0(cv2.cv.BoxPoints(b)), boxes)
-    cv2.drawContours(img, boxes2draw, -1, (0, 0, 255), 2)
-    cv2.imwrite("debug/out_with_contours.tif", img)
+    return orig_img, resulting_contours
+
+
+if __name__ == '__main__':
+    fnames = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
+    out_format = "png" if len(sys.argv) == 2 else sys.argv[2]
+
+    sheets = []
+    # Here we are processing all files one by one and also generating
+    # index sheet for it
+    for fname in glob(fnames):
+        out_dir_name = os.path.splitext(os.path.basename(fname))[0]
+
+        print("Processing file %s" % fname)
+        orig_img, resulting_contours = process_file(fname)
+    
+        img_with_overlay = overlay_contours(orig_img, resulting_contours)
+        path_to_image = save_image("full_overlay", img_with_overlay)
+
+        export_results_as_html(path_to_image, resulting_contours)
+
+        r = 200.0 / orig_img.shape[1]
+        dim = (200, int(orig_img.shape[0] * r))
+
+        resized = cv2.resize(orig_img, dim, interpolation=cv2.INTER_AREA)
+        path_to_image = save_image("thumb", resized)
+
+        sheets.append({
+            "name": out_dir_name,
+            "thumb": path_to_image
+        })
+
+    static_dir = os.path.join("out/static")
+    if os.path.exists(static_dir):
+        shutil.rmtree(static_dir)
+    shutil.copytree("static", static_dir)
+
+    with open("out/index.html", "w") as fp:
+        tpl = env.get_template("index_sheet.html")
+
+        fp.write(tpl.render(
+            sheets=sheets
+        ))

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Index sheet{% endblock %}
+
+{% block css %}
+    <style type="text/css">
+        a img {
+            border: 0;
+        }
+
+        .thumb {
+            float: left;
+            margin-right: 20px;
+        }
+        a {
+            display: block
+        }
+    </style>
+
+    <link href="static/base.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+{% for sheet in sheets %}
+    <div class="thumb">
+        <a href="{{ sheet.name }}/index.html"><img src="{{ sheet.thumb|replace("out/", "") }}" alt="{{ sheet.name }}"></a>
+        <a href="{{ sheet.name }}/index.html">
+            Page "{{ sheet.name }}"
+        </a>
+    </div>
+{% endfor %}
+{% endblock %}

@@ -57,5 +57,4 @@ venv
 .DS_Store
 # Full sized puzzle sources is to big for repo
 src/puzzle.tif
-debug/*.tif
 pieces/*.tif
