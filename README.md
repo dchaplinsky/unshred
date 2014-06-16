@@ -2,6 +2,9 @@ unshred
 =======
 Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchallenge/) tasks using Python &amp; OpenCV.
 
+### [Demo](http://dchaplinsky.github.io/unshred/)
+
+
 ### What it can (at the moment)
  * Detect and remove background (also background of the scanner)
  * Find pieces and separate them
@@ -23,7 +26,7 @@ I've used OpenCV/NumPy from [homebrew](http://brew.sh/). I think any 2.* OpenCV 
 I've included cropped version of task #1 of Darpa Shredder Challenge for the reference. For original files please visit [their website](http://archive.darpa.mil/shredderchallenge/Download.html)
 
 ### Speed
-On my oldie MBP 17" (2.66 Core I7, 8GB, SSD) it's oughly 6 minutes on 10 jpegs (300dpi), 200-250 pieces each.
+On my oldie MBP 17" (2.66 Core I7, 8GB, SSD) it's roughly 6 minutes on 10 jpegs (300dpi), 200-250 pieces each.
 
 ### Further reading
 I've grabbed and implemented first steps [of solution](http://www.marcnewlin.me/2011/12/you-should-probably-start-burning-your_02.html) from wasabi team.
