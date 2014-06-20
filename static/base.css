@@ -377,10 +377,10 @@ img.mfp-img {
 /* Styles for dialog window */
 .small-dialog {
     background: white;
-    padding: 20px 30px;
+    padding: 20px;
     text-align: left;
-    max-width: 400px;
-    margin: 40px auto;
+    max-width: 700px;
+    margin: 30px auto;
     position: relative;
 }
 
@@ -448,9 +448,13 @@ img.mfp-img {
 
 .shed-img {
   float: left;
-  padding: 20px;
+  padding: 20px 0;
   margin-right: 20px;
-  background: url(checkerboard.png);
+}
+
+.shed-img.transparent-bg {
+  padding: 20px;
+  background: url(checkerboard.png);  
 }
 
 .shed-features {  

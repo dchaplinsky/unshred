@@ -121,15 +121,22 @@ def find_appropriate_mask(img):
     # Here we calculate mask to separate background of the scanner
     scanner_bg = replace_scanner_background(img)
 
+    backgrounds = [[
+        # [np.array([160, 35, 210]), np.array([180, 150, 255])],
+        [np.array([160, 50, 210]), np.array([200, 150, 255])]
+    ]]
+
     # And here we are trying to check different ranges for different
     # background to find the winner.
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
     for bg in backgrounds:
         mask = np.zeros(img.shape[:2], np.uint8)
 
         for rng in bg:
             # As each pre-defined background is described by a list of
             # color ranges we are summing up their masks
-            mask = cv2.bitwise_or(mask, cv2.inRange(img, rng[0], rng[1]))
+            mask = cv2.bitwise_or(mask, cv2.inRange(hsv, rng[0], rng[1]))
 
         hist = cv2.calcHist([mask], [0], None, [2], [0, 256])
         # And here we are searching for a biggest possible mask across all
@@ -146,11 +153,19 @@ def find_appropriate_mask(img):
 
     # and run grabcut algo against the seed mask to refine background
     # separation
-    res = cv2.medianBlur(res, 5)
-    mask = np.where((res == 255), cv2.GC_BGD, cv2.GC_PR_FGD).astype('uint8')
-    cv2.grabCut(img, mask, None, bgdModel, fgdModel, 2, cv2.GC_INIT_WITH_MASK)
-    res = np.where((mask == 2) | (mask == 0), 255, 0).astype('uint8')
+    # cv2.imwrite("debug/mask1.png", res)
 
+    res = cv2.morphologyEx(res, cv2.MORPH_OPEN, np.ones((3, 7), np.uint8))
+    cv2.imwrite("debug/mask2.png", res)
+
+    # res = cv2.morphologyEx(res, cv2.MORPH_ERODE, np.ones((5, 5), np.uint8))
+    # cv2.imwrite("debug/mask3.png", res)
+
+    # mask = np.where((res == 255), cv2.GC_PR_BGD, cv2.GC_PR_FGD).astype('uint8')
+    # cv2.grabCut(hsv, mask, None, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_MASK)
+    # res = np.where((mask == 2) | (mask == 0), 255, 0).astype('uint8')
+
+    cv2.imwrite("debug/mask4.png", res)
     return cv2.bitwise_not(res)
 
 
@@ -184,7 +199,7 @@ def extract_piece_and_features(img, c, name):
     area = cv2.contourArea(c)
 
     # filter out too small fragments
-    if r_w <= 10 or r_h <= 10 or area < 100:
+    if r_w <= 20 or r_h <= 20 or area < 200:
         print("Skipping piece #%s as too small" % name)
         return None
 
@@ -219,6 +234,10 @@ def extract_piece_and_features(img, c, name):
 
     # apply mask to original image
     img_crp = img[r_y:r_y + r_h, r_x:r_x + r_w]
+    piece_in_context = save_image(
+        "pieces/%s_ctx" % name,
+        img[r_y - 10:r_y + r_h + 10, r_x - 10:r_x + r_w + 10])
+
     mask = mask[r_y:r_y + r_h, r_x:r_x + r_w]
     img_roi = cv2.bitwise_and(img_crp, img_crp, mask=mask)
 
@@ -257,8 +276,8 @@ def extract_piece_and_features(img, c, name):
     corners = cv2.goodFeaturesToTrack(mask, 25, 0.01, 10)
     corners = np.int0(corners) if corners is not None else []
 
-    edges = cv2.Canny(img_roi[:, :, 2], 100, 200)
-    save_image("pieces/%s_edges" % name, edges)
+    # edges = cv2.Canny(img_roi[:, :, 2], 100, 200)
+    # save_image("pieces/%s_edges" % name, edges)
 
     # Draw contours for debug purposes
     mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGRA)
@@ -279,18 +298,20 @@ def extract_piece_and_features(img, c, name):
 
         # Check for convex defects to see if we can find a trace of a
         # shredder cut which is usually on top of the piece.
-        for i in range(defects.shape[0]):
-            s, e, f, d = defects[i, 0]
-            far = tuple(cnt[f][0])
 
-            # if convex defect is big enough
-            if d / 256. > 7:
-                # And lays at the top or bottom of the piece
-                y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
-                if float(y_dist) / mask.shape[0] < 0.1:
-                    # and more or less is in the center
-                    if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
-                        cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
+        if defects is not None:
+            for i in range(defects.shape[0]):
+                s, e, f, d = defects[i, 0]
+                far = tuple(cnt[f][0])
+
+                # if convex defect is big enough
+                if d / 256. > 7:
+                    # And lays at the top or bottom of the piece
+                    y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
+                    if float(y_dist) / mask.shape[0] < 0.1:
+                        # and more or less is in the center
+                        if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
+                            cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
 
     # Also top and bottom points on the contour
     topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
@@ -305,11 +326,16 @@ def extract_piece_and_features(img, c, name):
             "angle": angle,
             "ratio": mask.shape[0] / float(mask.shape[1]),
             "solidity": solidity,
+            "x": r_x,
+            "y": r_y,
+            "width": r_w,
+            "height": r_h
         },
         "contour": c,
         "name": name,
         "piece_fname": piece_fname,
         "features_fname": features_fname,
+        "piece_in_context_fname": piece_in_context,
         "simplified_contour": simplified_contour,
     }
 
@@ -370,7 +396,7 @@ def process_file(fname):
     # Walk through contours to extract pieces and unify the rotation
     resulting_contours = []
     for i, c in enumerate(contours):
-        cnt_features = extract_piece_and_features(processed_img, c, i)
+        cnt_features = extract_piece_and_features(orig_img, c, i)
         if cnt_features is not None:
             resulting_contours.append(cnt_features)
 
@@ -381,6 +407,11 @@ if __name__ == '__main__':
     fnames = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
     out_format = "png" if len(sys.argv) == 2 else sys.argv[2]
 
+    static_dir = os.path.join("out/static")
+    if os.path.exists(static_dir):
+        shutil.rmtree(static_dir)
+    shutil.copytree("static", static_dir)
+
     sheets = []
     # Here we are processing all files one by one and also generating
     # index sheet for it
@@ -389,7 +420,7 @@ if __name__ == '__main__':
 
         print("Processing file %s" % fname)
         orig_img, resulting_contours = process_file(fname)
-    
+
         img_with_overlay = overlay_contours(orig_img, resulting_contours)
         path_to_image = save_image("full_overlay", img_with_overlay)
 
@@ -405,11 +436,6 @@ if __name__ == '__main__':
             "name": out_dir_name,
             "thumb": path_to_image
         })
-
-    static_dir = os.path.join("out/static")
-    if os.path.exists(static_dir):
-        shutil.rmtree(static_dir)
-    shutil.copytree("static", static_dir)
 
     with open("out/index.html", "w") as fp:
         tpl = env.get_template("index_sheet.html")

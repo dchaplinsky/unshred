@@ -32,7 +32,9 @@
             href="#shred-{{ c.name }}" />
 
         <div class="zoom-anim-dialog mfp-hide small-dialog" id="shred-{{ c.name }}">
-            <div class="shed-img"><img data-src="{{ c.piece_fname|replace(export_dir + "/", "") }}" data-xray="{{ c.features_fname|replace(export_dir + "/", "") }}"/></div>
+            <div class="shed-img with-xray transparent-bg">
+                <img data-src="{{ c.piece_fname|replace(export_dir + "/", "") }}" data-xray="{{ c.features_fname|replace(export_dir + "/", "") }}"/></div>
+            <div class="shed-img"><img data-src="{{ c.piece_in_context_fname|replace(export_dir + "/", "") }}" /></div>
             <div class="shed-features">
                 <h3>Page #{{ out_dir_name }} / piece #{{ c.name }}</h3>
                 {{ render_dict_as_table(c.features) }}
@@ -49,7 +51,7 @@
         $(function(e) {
             $('img[usemap]').rwdImageMaps();
 
-            $(".shed-img img").hover(
+            $(".shed-img.with-xray img").hover(
                 function(){
                     $(this).attr("src", $(this).data("xray"));
                 },
@@ -72,9 +74,10 @@
                 mainClass: 'my-mfp-zoom-in',
                 callbacks: {
                     open: function() {
-                        var img = this.content.find("img");
-
-                        img.attr("src", img.data("src"));
+                        this.content.find("img").each(function() {
+                            var img = $(this);
+                            img.attr("src", img.data("src"));    
+                        });
                     }
                 }
             });
