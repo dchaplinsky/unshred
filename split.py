@@ -199,7 +199,7 @@ def extract_piece_and_features(img, c, name):
     area = cv2.contourArea(c)
 
     # filter out too small fragments
-    if r_w <= 20 or r_h <= 20 or area < 200:
+    if r_w <= 20 or r_h <= 20 or area < 500:
         print("Skipping piece #%s as too small" % name)
         return None
 
@@ -236,7 +236,8 @@ def extract_piece_and_features(img, c, name):
     img_crp = img[r_y:r_y + r_h, r_x:r_x + r_w]
     piece_in_context = save_image(
         "pieces/%s_ctx" % name,
-        img[r_y - 10:r_y + r_h + 10, r_x - 10:r_x + r_w + 10])
+        img[max(r_y - 10, 0):r_y + r_h + 10,
+            max(r_x - 10, 0):r_x + r_w + 10])
 
     mask = mask[r_y:r_y + r_h, r_x:r_x + r_w]
     img_roi = cv2.bitwise_and(img_crp, img_crp, mask=mask)
@@ -292,26 +293,27 @@ def extract_piece_and_features(img, c, name):
     cnt = contours[0]
 
     # Let's find features that will help us to determine top side of the piece
-    if mask.shape[0] / float(mask.shape[1]) >= 2.7:
-        hull = cv2.convexHull(cnt, returnPoints=False)
-        defects = cv2.convexityDefects(cnt, hull)
+    # if mask.shape[0] / float(mask.shape[1]) >= 2.7:
+    hull = cv2.convexHull(cnt, returnPoints=False)
+    defects = cv2.convexityDefects(cnt, hull)
 
-        # Check for convex defects to see if we can find a trace of a
-        # shredder cut which is usually on top of the piece.
+    # Check for convex defects to see if we can find a trace of a
+    # shredder cut which is usually on top of the piece.
 
-        if defects is not None:
-            for i in range(defects.shape[0]):
-                s, e, f, d = defects[i, 0]
-                far = tuple(cnt[f][0])
+    if defects is not None:
+        for i in range(defects.shape[0]):
+            s, e, f, d = defects[i, 0]
+            far = tuple(cnt[f][0])
 
-                # if convex defect is big enough
-                if d / 256. > 7:
-                    # And lays at the top or bottom of the piece
-                    y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
-                    if float(y_dist) / mask.shape[0] < 0.1:
-                        # and more or less is in the center
-                        if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
-                            cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
+            # if convex defect is big enough
+            if d / 256. > 7:
+                cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
+                # # And lays at the top or bottom of the piece
+                # y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
+                # if float(y_dist) / mask.shape[0] < 0.1:
+                #     # and more or less is in the center
+                #     if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
+                #         cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
 
     # Also top and bottom points on the contour
     topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
