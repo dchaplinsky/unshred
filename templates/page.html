@@ -26,7 +26,7 @@
     <img src="{{ img_name }}" usemap="#shreds_map" alt="" />
     <map name="shreds_map">
         {% for c in contours %}
-        <area shape="poly" coords="{{ c.simplified_contour }}"
+        <area shape="poly" coords="{{ c.simplified_contour|convert_poly_to_string }}"
             class="popup-with-zoom-anim" 
             title="{{ c.name }}"
             href="#shred-{{ c.name }}" />
