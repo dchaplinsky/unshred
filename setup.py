@@ -1,5 +1,6 @@
 from setuptools import setup
 import os
+from unshred import __version__
 
 with open(os.path.join(os.path.dirname(__file__),
                        "requirements.txt")) as req_file:
@@ -7,7 +8,7 @@ with open(os.path.join(os.path.dirname(__file__),
 
 setup(
     name='unshred',
-    version="0.0.1",
+    version=__version__,
     url='https://github.com/dchaplinsky/unshred',
     license='MIT',
     author='Dmitry Chaplinsky',
