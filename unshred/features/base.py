@@ -13,8 +13,8 @@ class GeometryFeatures(AbstractShredFeature):
         solidity = float(area) / hull_area
 
         # Also top and bottom points on the contour
-        topmost = tuple(contour[contour[:, :, 1].argmin()][0])
-        bottommost = tuple(contour[contour[:, :, 1].argmax()][0])
+        topmost = list(contour[contour[:, :, 1].argmin()][0])
+        bottommost = list(contour[contour[:, :, 1].argmax()][0])
         _, _, r_w, r_h = cv2.boundingRect(contour)
         tags = []
 
