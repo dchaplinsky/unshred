@@ -6,7 +6,9 @@ import cv2
 import math
 import numpy as np
 from glob import glob
+import exifread
 from jinja2 import FileSystemLoader, Environment
+from features.base import GeometryFeatures
 
 
 def convert_poly_to_string(poly):
@@ -27,6 +29,62 @@ class Sheet(object):
          [np.array([210, 185, 245]), np.array([235, 195, 255])],
          ],
     ]
+
+    def __init__(self, fname, sheet_name, feature_extractors,
+                 out_format="png"):
+
+        self.fname = fname
+        self.sheet_name = sheet_name
+        self.out_format = out_format
+
+        self.orig_img = cv2.imread(fname)
+        self.res_x, self.res_y = self.determine_dpi()
+        self.feature_extractors = [feat(self) for feat in feature_extractors]
+
+        processed_img, mask = self.open_image_and_separate_bg(self.orig_img)
+
+        # Find contours of pieces
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
+                                       cv2.CHAIN_APPROX_SIMPLE)
+
+        # Walk through contours to extract pieces and unify the rotation
+        self.resulting_contours = []
+        for i, c in enumerate(contours):
+            cnt_features = self.extract_piece_and_features(c, i)
+            if cnt_features is not None:
+                self.resulting_contours.append(cnt_features)
+
+    def determine_dpi(self):
+        def parse_resolution(val):
+            x = map(int, map(str.strip, str(val).split("/")))
+            if len(x) == 1:
+                return x[0]
+            elif len(x) == 2:
+                return int(round(float(x[0]) / x[1]))
+            else:
+                raise ValueError
+
+        with open(self.fname, "rb") as f:
+            tags = exifread.process_file(f)
+
+        try:
+            if "Image XResolution" in tags and "Image YResolution" in tags:
+                return (parse_resolution(tags["Image XResolution"]),
+                        parse_resolution(tags["Image YResolution"]))
+        except ValueError:
+            pass
+
+        # Resolution cannot be determined via exif, let's assume that we are
+        # dealing with A4 (8.27 in x 11.7) and try to guess it
+
+        w, h = min(self.orig_img.shape[:2]), max(self.orig_img.shape[:2])
+        xres, yres = w / 8.27, h / 11.7
+
+        # Will suffice for now
+        if max(xres, yres) / min(xres, yres) > 1.1:
+            raise ValueError
+
+        return int(round(xres, -2)), int(round(yres, -2))
 
     def save_image(self, fname, img, format=None):
         full_out_dir, fname = os.path.split(
@@ -92,12 +150,13 @@ class Sheet(object):
                 break
 
         # Then we dilate it a bit.
-        fimg = cv2.morphologyEx(fimg, cv2.MORPH_DILATE, np.ones((5, 5), np.uint8),
-                                iterations=2)
+        fimg = cv2.morphologyEx(fimg, cv2.MORPH_DILATE,
+                                np.ones((5, 5), np.uint8), iterations=2)
         fimg = fimg[5:-5, 5:-5]
 
         # Searching for a biggest outter contour
-        contours, _ = cv2.findContours(cv2.bitwise_not(fimg), cv2.RETR_EXTERNAL,
+        contours, _ = cv2.findContours(cv2.bitwise_not(fimg),
+                                       cv2.RETR_EXTERNAL,
                                        cv2.CHAIN_APPROX_SIMPLE)
         main_contour = np.array(map(cv2.contourArea, contours)).argmax()
 
@@ -179,22 +238,16 @@ class Sheet(object):
 
         # bounding rect of currrent contour
         r_x, r_y, r_w, r_h = cv2.boundingRect(c)
-        area = cv2.contourArea(c)
-
-        # filter out too small fragments
-        if r_w <= 20 or r_h <= 20 or area < 500:
-            print("Skipping piece #%s as too small" % name)
-            return None
 
         # Generating simplified contour to use it in html
         epsilon = 0.01 * cv2.arcLength(c, True)
         simplified_contour = cv2.approxPolyDP(c, epsilon, True)
 
-        hull = cv2.convexHull(c)
-        hull_area = cv2.contourArea(hull)
-        solidity = float(area) / hull_area
-        if solidity < 0.75:
-            print("Piece #%s looks suspicious" % name)
+        area = cv2.contourArea(c)
+        # filter out too small fragments
+        if r_w <= 20 or r_h <= 20 or area < 500:
+            print("Skipping piece #%s as too small" % name)
+            return None
 
         # position of rect of min area.
         # this will provide us angle to straighten image
@@ -250,78 +303,38 @@ class Sheet(object):
         #
         # Get our mask/contour back after the trasnform
         _, _, _, mask = cv2.split(img_roi)
+
         contours, _ = cv2.findContours(mask.copy(), cv2.RETR_TREE,
                                        cv2.CHAIN_APPROX_SIMPLE)
 
         if len(contours) != 1:
             print("Piece #%s has strange contours after transform" % name)
 
-        # Let's also detect 25 of most outstanding corners of the contour.
-        corners = cv2.goodFeaturesToTrack(mask, 25, 0.01, 10)
-        corners = np.int0(corners) if corners is not None else []
-
-        # edges = cv2.Canny(img_roi[:, :, 2], 100, 200)
-        # save_image("pieces/%s_edges" % name, edges)
-
-        # Draw contours for debug purposes
-        mask = cv2.cvtColor(mask, cv2.cv.CV_GRAY2BGRA)
-        mask[:, :, 3] = mask[:, :, 0]
-        cv2.drawContours(mask, contours, -1, (255, 0, 255, 255), 2)
-
-        # And put corners on top
-        for i in corners:
-            x, y = i.ravel()
-            cv2.circle(mask, (x, y), 3, (0, 255, 0, 255), -1)
-
         cnt = contours[0]
 
-        # Let's find features that will help us to determine top side of the piece
-        # if mask.shape[0] / float(mask.shape[1]) >= 2.7:
-        hull = cv2.convexHull(cnt, returnPoints=False)
-        defects = cv2.convexityDefects(cnt, hull)
-
-        # Check for convex defects to see if we can find a trace of a
-        # shredder cut which is usually on top of the piece.
-
-        if defects is not None:
-            has_defects = False
-            for i in range(defects.shape[0]):
-                s, e, f, d = defects[i, 0]
-                far = tuple(cnt[f][0])
-
-                # if convex defect is big enough
-                if d / 256. > 50:
-                    has_defects = True
-                    cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
-
-                    # # And lays at the top or bottom of the piece
-                    # y_dist = min(abs(0 - far[1]), abs(mask.shape[0] - far[1]))
-                    # if float(y_dist) / mask.shape[0] < 0.1:
-                    #     # and more or less is in the center
-                    #     if abs(far[0] - mask.shape[1] / 2.) / mask.shape[1] < 0.25:
-                    #         cv2.circle(mask, far, 5, [0, 0, 255, 255], -1)
-
-            # if has_defects:
-            #     cv2.imwrite("debug/def_20_%s_%s.png" % (self.sheet_name, name), mask)
-
-        # Also top and bottom points on the contour
-        topmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
-        bottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
-        cv2.circle(mask, topmost, 3, [0, 255, 255, 255], -1)
-        cv2.circle(mask, bottommost, 3, [0, 255, 255, 255], -1)
-
         features_fname = self.save_image("pieces/%s_mask" % name, mask, "png")
+
+        base_features = {
+            "angle": angle,
+            "pos_x": r_x,
+            "pos_y": r_y,
+            "pos_width": r_w,
+            "pos_height": r_h
+        }
+
+        tags_suggesions = []
+
+        for feat in self.feature_extractors:
+            fts, tags = feat.get_info(img_roi, cnt)
+            base_features.update(fts)
+            tags_suggesions += tags
+
+        if tags_suggesions:
+            print(name, tags_suggesions)
+
         return {
-            "features": {
-                "area": area,
-                "angle": angle,
-                "ratio": mask.shape[0] / float(mask.shape[1]),
-                "solidity": solidity,
-                "x": r_x,
-                "y": r_y,
-                "width": r_w,
-                "height": r_h
-            },
+            "features": base_features,
+            "tags_suggesions": tags_suggesions,
             "contour": c,
             "name": name,
             "piece_fname": piece_fname,
@@ -365,25 +378,6 @@ class Sheet(object):
                 out_dir_name=self.sheet_name
             ))
 
-    def __init__(self, fname, sheet_name, out_format="png"):
-        self.sheet_name = sheet_name
-        self.out_format = out_format
-
-        self.orig_img = cv2.imread(fname)
-
-        processed_img, mask = self.open_image_and_separate_bg(self.orig_img)
-
-        # Find contours of pieces
-        contours, _ = cv2.findContours(mask, cv2.RETR_TREE,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-
-        # Walk through contours to extract pieces and unify the rotation
-        self.resulting_contours = []
-        for i, c in enumerate(contours):
-            cnt_features = self.extract_piece_and_features(c, i)
-            if cnt_features is not None:
-                self.resulting_contours.append(cnt_features)
-
     def save_thumb(self, width=200):
         r = float(width) / self.orig_img.shape[1]
         dim = (width, int(self.orig_img.shape[0] * r))
@@ -408,7 +402,7 @@ if __name__ == '__main__':
         sheet_name = os.path.splitext(os.path.basename(fname))[0]
 
         print("Processing file %s" % fname)
-        sheet = Sheet(fname, sheet_name, out_format)
+        sheet = Sheet(fname, sheet_name, [GeometryFeatures], out_format)
 
         sheet.export_results_as_html()
         sheets.append({

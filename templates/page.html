@@ -7,6 +7,8 @@
                 <td><strong>{{ key }}</strong></td>
                 {% if value.__class__.__name__ == "dict" %}
                 <td>{{ render_dict_as_table(value) }}</td>
+                {% elif value.__class__.__name__ == "float" %}
+                <td>{{ "%5.2f"|format(value) }}</td>
                 {% else %}
                 <td>{{ value }}</td>
                 {% endif %}
