@@ -1,0 +1,3 @@
+include requirements.txt
+recursive-include unshred/templates *.html
+recursive-include unshred/static *.css *.js *.png 
