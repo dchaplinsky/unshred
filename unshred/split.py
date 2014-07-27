@@ -8,7 +8,7 @@ import numpy as np
 from glob import glob
 import exifread
 from jinja2 import FileSystemLoader, Environment
-from features.base import GeometryFeatures
+from features import GeometryFeatures
 
 
 def convert_poly_to_string(poly):
@@ -31,11 +31,12 @@ class Sheet(object):
     ]
 
     def __init__(self, fname, sheet_name, feature_extractors,
-                 out_format="png"):
+                 out_dir="out", out_format="png"):
 
         self.fname = fname
         self.sheet_name = sheet_name
         self.out_format = out_format
+        self.out_dir = out_dir
 
         self.orig_img = cv2.imread(fname)
         self.res_x, self.res_y = self.determine_dpi()
@@ -88,7 +89,7 @@ class Sheet(object):
 
     def save_image(self, fname, img, format=None):
         full_out_dir, fname = os.path.split(
-            os.path.join("out", self.sheet_name, fname))
+            os.path.join(self.out_dir, self.sheet_name, fname))
 
         try:
             os.makedirs(full_out_dir)
@@ -389,8 +390,9 @@ class Sheet(object):
 if __name__ == '__main__':
     fnames = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
     out_format = "png" if len(sys.argv) == 2 else sys.argv[2]
+    out_dir = "out"
 
-    static_dir = os.path.join("out/static")
+    static_dir = os.path.join(out_dir, "static")
     if os.path.exists(static_dir):
         shutil.rmtree(static_dir)
     shutil.copytree("static", static_dir)
@@ -402,7 +404,8 @@ if __name__ == '__main__':
         sheet_name = os.path.splitext(os.path.basename(fname))[0]
 
         print("Processing file %s" % fname)
-        sheet = Sheet(fname, sheet_name, [GeometryFeatures], out_format)
+        sheet = Sheet(fname, sheet_name,
+                      [GeometryFeatures], out_dir, out_format)
 
         sheet.export_results_as_html()
         sheets.append({
