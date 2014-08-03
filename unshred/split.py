@@ -8,7 +8,7 @@ import numpy as np
 from glob import glob
 import exifread
 from jinja2 import FileSystemLoader, Environment
-from features import GeometryFeatures
+from features import GeometryFeatures, ColourFeatures
 
 
 def convert_poly_to_string(poly):
@@ -326,7 +326,7 @@ class Sheet(object):
         tags_suggesions = []
 
         for feat in self.feature_extractors:
-            fts, tags = feat.get_info(img_roi, cnt)
+            fts, tags = feat.get_info(img_roi, cnt, name)
             base_features.update(fts)
             tags_suggesions += tags
 
@@ -405,7 +405,7 @@ if __name__ == '__main__':
 
         print("Processing file %s" % fname)
         sheet = Sheet(fname, sheet_name,
-                      [GeometryFeatures], out_dir, out_format)
+                      [GeometryFeatures, ColourFeatures], out_dir, out_format)
 
         sheet.export_results_as_html()
         sheets.append({

@@ -4,7 +4,7 @@ from .base import AbstractShredFeature
 
 
 class GeometryFeatures(AbstractShredFeature):
-    def get_info(self, shred, contour):
+    def get_info(self, shred, contour, name):
         area = cv2.contourArea(contour)
 
         hull = cv2.convexHull(contour)

@@ -1,10 +1,8 @@
-from .base import AbstractShredFeature
-import json
 import cv2
-from array import array
-import os.path
-from colourdistance import closest_by_palette
-from collections import Counter
+import itertools
+from PIL import Image
+
+from .base import AbstractShredFeature
 
 
 def hex_to_bgr(hex_digits):
@@ -16,61 +14,139 @@ def hex_to_bgr(hex_digits):
 
 
 class ColourFeatures(AbstractShredFeature):
+    palette_colours = [
+        "000000",
+        "434343",
+        "666666",
+        "999999",
+        "b7b7b7",
+        "cccccc",
+        "d9d9d9",
+        "efefef",
+        "f3f3f3",
+        "ffffff",
+        "96000a",
+        "fc0019",
+        "fc992b",
+        "fcff42",
+        "06ff3b",
+        "2cfffe",
+        "5284e4",
+        "2a00f9",
+        "a4170e",
+        "ca0012",
+        "efc347",
+        "69a956",
+        "48818d",
+        "4676d4",
+        "4484c3",
+        "694ba4",
+        "a54b78",
+        "831e13",
+        "97000a",
+        "b15f1b",
+        "bd9024",
+        "387727",
+        "184f5b",
+        "2652c8",
+        "1a5290",
+        "371872",
+        "731746",
+        "5a0d04",
+        "650004",
+        "773f10",
+        "7e6015",
+        "274f19",
+        "0f343b",
+        "234484",
+        "103661",
+        "22104b",
+        "4b0f2f",
+    ]
+
+    skip = 10  # Amount of colours from the beginning of the list to ignore
+               # white, black and shades of gray.
+
     def __init__(self, *args, **kwargs):
         super(ColourFeatures, self).__init__(*args, **kwargs)
-        fname = os.path.join(os.path.dirname(__file__), "palette.json")
 
-        with open(fname, "r") as fp:
-            self.palette = json.load(fp)
+        # Building our special palette.
+        # Pillow is strange when it goes about palettes.
+        # Here we are creating a new image and add some colours to it's
+        # palette and rest of unused 256 is set to white. Otherwise
+        # PIL will use shades of gray to fill unused ones.
+        self.palette = Image.new("P", (1, 1), 0)
 
-        self.reverse_palette = {}
-        self.flat_palette = []
-        self.bands = []
-        for band, colours in self.palette.iteritems():
-            self.bands.append(band)
-            for colour in map(hex_to_bgr, colours):
-                self.reverse_palette[colour] = len(self.bands) - 1
-                self.flat_palette.append(colour)
+        # convert colours to the form suitable for set_palette
+        plt = list(itertools.chain.from_iterable(
+                   map(hex_to_bgr, self.palette_colours)))
 
-        self.generate_mapping()
+        # padding the rest of palette with white colour
+        self.palette.putpalette(
+            plt + [255, 255, 255] * (256 - len(self.palette_colours)))
 
-    def generate_mapping(self):
-        cache_fname = os.path.join(os.path.dirname(__file__), "mapping.pickle")
-        if os.path.exists(cache_fname):
-            with open(cache_fname, "rb") as fp:
-                self.plt = array("B")
-                self.plt.fromfile(fp, 1 << 24)
-            return
+    def has_blue_ink(self, histogram):
+        h = dict(zip(self.palette_colours, histogram))
+        ratio = (h["694ba4"] + h["5284e4"] +
+                 h["2a00f9"]) / float(sum(histogram))
 
-        self.plt = array("B")
-        for b in xrange(0, 256):
-            print(b)
-            for g in xrange(0, 256):
-                for r in xrange(0, 256):
-                    self.plt.append(self.reverse_palette[
-                        self.flat_palette[
-                            closest_by_palette((r, g, b), self.flat_palette)]])
+        # Too much of blue inc is also bad (usually means a picture)
+        if (ratio >= 0.01 and ratio <= 0.1 and
+                not self.part_of_a_picture(histogram)):
+            return True
 
-        with open(cache_fname, "wb") as fp:
-            self.plt.tofile(fp)
+    def part_of_a_picture(self, histogram):
+        if sum(histogram[self.skip:]) / float(sum(histogram)) > 0.2:
+            return True
 
-    def convert_colour(self, px):
-        if px[3] == 0:
-            return 'transparent'
-        else:
-            return self.bands[self.plt[(px[0] << 16) + (px[1] << 8) + px[2]]]
+    def has_yellow_marks(self, histogram):
+        h = dict(zip(self.palette_colours, histogram))
+        ratio = (h["efc347"] + h["fcff42"]) / float(sum(histogram))
 
-    def get_info(self, shred, contour):
-        w, h, _ = shred.shape
-        w = int(w / 3)
-        h = int(h / 3)
+        # Too much of blue inc is also bad (usually means a picture)
+        if (ratio >= 0.05):
+            return True
 
-        resized = cv2.resize(shred, (w, h),
-                             interpolation=cv2.INTER_AREA)
+    # List of heuristics for particular features.
+    tag_detectors = {
+        "Has blue ink": has_blue_ink,
+        "Part of a picture": part_of_a_picture,
+        "Has yellow marks": has_yellow_marks,
+    }
 
-        cnt = Counter(self.convert_colour(resized[x, y])
-                      for x in xrange(h)
-                      for y in xrange(w))
+    def get_info(self, shred, contour, name):
+        shred_pil = Image.fromarray(cv2.cvtColor(shred, cv2.COLOR_BGR2RGB))
 
-        print(cnt)
-        return {}, ()
+        # downsampling image to our palette
+        converted = shred_pil.quantize(palette=self.palette)
+        # converted.save("../debug/converted%s.png" % name)
+
+        mask = Image.fromarray(shred[:, :, 3])
+        # Converting histogram with mask applied
+        hist = converted.histogram(mask=mask)[:len(self.palette_colours)]
+
+        total_pixels = sum(hist)
+        hist_to_store = [0] * self.skip
+        dominant_colours = []
+
+        # Preparing clean version of histogram where only colours that has
+        # > 1% is included. Same goes for the list of dominant colours.
+        # Of course we are skipping white/black and shades of gray.
+        for i, x in enumerate(self.palette_colours[self.skip:]):
+            if hist[i + self.skip] > 0.01 * total_pixels:
+                hist_to_store.append(hist[i + self.skip])
+                dominant_colours.append(x)
+            else:
+                hist_to_store.append(0)
+
+        tags = []
+        for tag_name, tag_detector in self.tag_detectors.iteritems():
+            if tag_detector(self, hist):
+                tags.append(tag_name)
+
+        return {
+            "histogram_clean": hist_to_store,
+            "histogram_full": hist,
+            "colour_names": self.palette_colours,
+            "dominant_colours": dominant_colours
+        }, tuple(tags)
