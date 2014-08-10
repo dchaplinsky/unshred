@@ -1,3 +1,6 @@
-__version__ = '0.0.6'
+__version__ = '0.0.8'
 
-from .split import Sheet
+try:
+    from .split import Sheet
+except ImportError:
+    pass

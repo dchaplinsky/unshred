@@ -323,19 +323,19 @@ class Sheet(object):
             "pos_height": r_h
         }
 
-        tags_suggesions = []
+        tags_suggestions = []
 
         for feat in self.feature_extractors:
             fts, tags = feat.get_info(img_roi, cnt, name)
             base_features.update(fts)
-            tags_suggesions += tags
+            tags_suggestions += tags
 
-        if tags_suggesions:
-            print(name, tags_suggesions)
+        if tags_suggestions:
+            print(name, tags_suggestions)
 
         return {
             "features": base_features,
-            "tags_suggesions": tags_suggesions,
+            "tags_suggestions": tags_suggestions,
             "contour": c,
             "name": name,
             "piece_fname": piece_fname,
