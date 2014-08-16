@@ -4,6 +4,13 @@ Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchall
 
 ### [Demo](http://dchaplinsky.github.io/unshred/)
 
+### Installation
+ * Install OpenCV using your favorite package manager or by following [instructions from openCV site](http://opencv.org/downloads.html). Make sure that you have 2.4.x. This code doesn't work with 2.3.x
+ * [Install pip](http://pip.readthedocs.org/en/latest/installing.html#install-pip)
+ * Checkout codebase from github.
+ * Run ```pip install -r requirements.txt``` (if you are using virtualenv, make sure you've created your env with ```--system-site-packages``` option so you'll have an access to openCV bindings which are installed globally)
+ * Run it on test file: ```python split.py ../src/puzzle.tif```
+ * If everything was ok it should create bunch of files in out/ dir, similar to those from the demo link above.
 
 ### What it can (at the moment)
  * Detect and remove background (also background of the scanner)
@@ -11,9 +18,13 @@ Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchall
  * Ignore crapy pieces (too small at the moment)
  * Detect pieces orientation and unify them (straighten and make vertical)
  * Save pieces with alpha channel
- * Detects some features to be used for future matching: top side of the piece, corners of contour, top/bottommost points
+ * Detects some features to be used for future matching: top side of the piece, corners of contour, top/bottommost points, palette, geometry
+ * Suggest tags (like “has blue ink”)
  * Can process files in batch mode
  * Output debug info in nifty html with ability to review each detected piece in great detail.
+
+### Development
+Check features subdir for examples of feature detectors and interfaces they are using. If you have an idea or implementation of good features — contact me!
 
 ### Requirements
  * [NumPy 1.7.1](http://www.numpy.org/)
