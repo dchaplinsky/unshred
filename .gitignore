@@ -58,3 +58,4 @@ venv
 # Full sized puzzle sources is to big for repo
 src/puzzle.tif
 pieces/*.tif
+unshred/out/

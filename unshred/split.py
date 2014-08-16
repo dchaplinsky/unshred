@@ -23,11 +23,10 @@ env.filters["convert_poly_to_string"] = convert_poly_to_string
 class Sheet(object):
     backgrounds = [
         # DARPA SHRED task #1
-        [[np.array([0, 0, 165]), np.array([200, 100, 255])]],
+        [[np.array([30, 190, 180]), np.array([180, 255, 255])],
+         [np.array([0, 240, 170]), np.array([50, 255, 255])]],
         # Pink
-        [[np.array([160, 120, 230]), np.array([200, 210, 255])],
-         [np.array([210, 185, 245]), np.array([235, 195, 255])],
-         ],
+        [[np.array([160, 50, 210]), np.array([200, 150, 255])]],
     ]
 
     def __init__(self, fname, sheet_name, feature_extractors,
@@ -183,16 +182,13 @@ class Sheet(object):
         # Here we calculate mask to separate background of the scanner
         scanner_bg = self.replace_scanner_background(img)
 
-        backgrounds = [[
-            # [np.array([160, 35, 210]), np.array([180, 150, 255])],
-            [np.array([160, 50, 210]), np.array([200, 150, 255])]
-        ]]
-
         # And here we are trying to check different ranges for different
         # background to find the winner.
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-        for bg in backgrounds:
+        cv2.imwrite("foobar.jpg", hsv)
+
+        for bg in self.backgrounds:
             mask = np.zeros(img.shape[:2], np.uint8)
 
             for rng in bg:
