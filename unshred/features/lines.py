@@ -15,16 +15,14 @@ class LinesFeatures(AbstractShredFeature):
         params = {}
 
         gray = cv2.cvtColor(shred, cv2.COLOR_BGR2GRAY)
-        # gray = cv2.blur(gray, (5,5))
-        # thresh = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        # thimg = Image.fromarray(thresh[1])
-        # thimg.save('../debug/thresh_%s.png'%name)
-        edges = cv2.Canny(gray, 100, 200, apertureSize = 3)
+        edges = cv2.Canny(gray, 50, 200, apertureSize=3)
         # removing contours from the edges (by drawing them black)
-        cv2.drawContours(edges, contour, -1, (0, 0, 0), 18)
+        cv2.drawContours(edges, contour, -1, (0, 0, 0), 16)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, (3, 3))
         cv2.imwrite('../debug/edges_%s.png'%name, edges)
+        # cv2.imwrite('../debug/cont_%s.png'%name, contourImg)
 
-        lines = cv2.HoughLines(edges, 1, 1* numpy.pi/180, 40)
+        lines = cv2.HoughLines(edges, 1, 1* numpy.pi/180, 38)
 
         if not lines is None:
             ar = lines[0]
