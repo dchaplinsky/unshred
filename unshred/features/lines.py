@@ -15,29 +15,19 @@ class LinesFeatures(AbstractShredFeature):
         params = {}
 
         gray = cv2.cvtColor(shred, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 200, apertureSize=3)
+        gray_blur = cv2.GaussianBlur(gray, (15, 15), 0)
+        edges = cv2.adaptiveThreshold(gray_blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV, 5, 1)
         # removing contours from the edges (by drawing them black)
-        cv2.drawContours(edges, contour, -1, (0, 0, 0), 16)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, (3, 3))
+        cv2.drawContours(edges, contour, -1, (0, 0, 0), 24)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_ERODE, (6, 6), iterations=2)
+
         cv2.imwrite('../debug/edges_%s.png'%name, edges)
-        # cv2.imwrite('../debug/cont_%s.png'%name, contourImg)
 
-        lines = cv2.HoughLines(edges, 1, 1* numpy.pi/180, 38)
-
+        lines = cv2.HoughLinesP(edges, 1, numpy.pi/180, 20, minLineLength = 30, maxLineGap = 10)
         if not lines is None:
-            ar = lines[0]
-            # sorting by theta (for grouping by angle)
-            ar = ar[ar[:,1].argsort()]
             #debug images
-            for rho,theta in ar:
-                a = numpy.cos(theta)
-                b = numpy.sin(theta)
-                x0 = a*rho
-                y0 = b*rho
-                x1 = int(x0 + 1000*(-b)) # Here i have used int() instead of rounding the decimal value, so 3.8 --> 3
-                y1 = int(y0 + 1000*(a)) # But if you want to round the number, then use np.around() function, then 3.8 --> 4.0
-                x2 = int(x0 - 1000*(-b)) # But we need integers, so use int() function after that, ie int(np.around(x))
-                y2 = int(y0 - 1000*(a))
+            for x1,y1,x2,y2 in lines[0]:
                 cv2.line(gray,(x1,y1),(x2,y2),(255,0,0),2)
             cv2.imwrite('../debug/houghlines_%s.png'%name, gray)
 
