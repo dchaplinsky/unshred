@@ -59,3 +59,5 @@ venv
 src/puzzle.tif
 pieces/*.tif
 unshred/out/
+# IDEA
+.idea
