@@ -384,9 +384,9 @@ class Sheet(object):
 
 
 if __name__ == '__main__':
-    fnames = "src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
-    out_format = "png" if len(sys.argv) == 2 else sys.argv[2]
-    out_dir = "out"
+    fnames = "../src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
+    out_format = "png" if len(sys.argv) < 2 else sys.argv[2]
+    out_dir = "../out"
 
     static_dir = os.path.join(out_dir, "static")
     if os.path.exists(static_dir):
@@ -409,7 +409,7 @@ if __name__ == '__main__':
             "name": sheet.sheet_name
         })
 
-    with open("out/index.html", "w") as fp:
+    with open("../out/index.html", "w") as fp:
         tpl = env.get_template("index_sheet.html")
 
         fp.write(tpl.render(
