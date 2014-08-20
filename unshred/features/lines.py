@@ -22,16 +22,18 @@ class LinesFeatures(AbstractShredFeature):
         cv2.drawContours(edges, contour, -1, (0, 0, 0), 24)
         edges = cv2.morphologyEx(edges, cv2.MORPH_ERODE, (6, 6), iterations=2)
 
-        cv2.imwrite('../debug/edges_%s.png'%name, edges)
+        # const: uncomment for debug
+        # cv2.imwrite('../debug/edges_%s.png'%name, edges)
 
         lines = cv2.HoughLinesP(edges, 1, numpy.pi/180, 20, minLineLength = 30, maxLineGap = 10)
         if not lines is None:
+            # const: uncomment for debug
             #debug images
-            for x1,y1,x2,y2 in lines[0]:
-                cv2.line(gray,(x1,y1),(x2,y2),(255,0,0),2)
-            cv2.imwrite('../debug/houghlines_%s.png'%name, gray)
+            # for x1,y1,x2,y2 in lines[0]:
+                # cv2.line(gray,(x1,y1),(x2,y2),(255,0,0),2)
+            # cv2.imwrite('../debug/houghlines_%s.png'%name, gray)
 
-            params['Lines Count'] = len(lines)
+            params['Lines Count'] = len(lines[0])
             tags.append(self.TAG_HAS_LINES_FEATURE)
 
         return params, tags
