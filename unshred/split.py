@@ -11,6 +11,7 @@ from jinja2 import FileSystemLoader, Environment
 import numpy as np
 
 from features import GeometryFeatures, ColourFeatures
+from unshred.features.lines import LinesFeatures
 
 
 parser = ArgumentParser()
@@ -239,7 +240,7 @@ class Sheet(object):
         img = cv2.bitwise_and(img, img, mask=mask)
 
         # Write original image with no background for debug purposes
-        cv2.imwrite("debug/mask.tif", mask)
+        cv2.imwrite("../debug/mask.tif", mask)
 
         return img, mask
 
@@ -417,7 +418,7 @@ if __name__ == '__main__':
 
         print("Processing file %s" % fname)
         sheet = Sheet(fname, sheet_name,
-                      [GeometryFeatures, ColourFeatures], out_dir, out_format)
+                      [GeometryFeatures, ColourFeatures, LinesFeatures], out_dir, out_format)
 
         sheet.export_results_as_html()
         sheets.append({
