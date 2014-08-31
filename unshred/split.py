@@ -385,8 +385,8 @@ class Sheet(object):
 
 
 if __name__ == '__main__':
-    fnames = "../src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
-    out_format = "png" if len(sys.argv) < 2 else sys.argv[2]
+    fnames = "../src/puzzle_small.tif" if len(sys.argv) <= 1 else sys.argv[1]
+    out_format = "png" if len(sys.argv) <= 2 else sys.argv[2]
     out_dir = "../out"
 
     static_dir = os.path.join(out_dir, "static")
