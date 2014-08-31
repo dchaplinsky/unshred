@@ -16,7 +16,9 @@ class LinesFeatures(AbstractShredFeature):
         _, _, _, mask = cv2.split(shred)
         #
         # # expanding mask for future removal of a border
-        mask = cv2.morphologyEx(mask, cv2.MORPH_ERODE, (3, 3), iterations=2)
+        kernel = numpy.ones((5,5),numpy.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_ERODE, kernel, iterations=2)
+        _, mask = cv2.threshold(mask, 240, 0, cv2.THRESH_TOZERO)
         #
         # # thresholding our shred
         gray = cv2.cvtColor(shred, cv2.COLOR_BGR2GRAY)
@@ -31,8 +33,12 @@ class LinesFeatures(AbstractShredFeature):
         edges = cv2.medianBlur(edges, 3)
         # const: uncomment for debug
         cv2.imwrite('../debug/edges_%s.png' % name, edges)
+        cv2.imwrite('../debug/mask_%s.png' % name, mask)
 
-        lines = cv2.HoughLinesP(edges, 1, numpy.pi / 180, 20, minLineLength=50, maxLineGap=30)
+        _, _, r_w, r_h = cv2.boundingRect(contour)
+
+        # Line len should be at least 80% of shred's width, gap - 20%
+        lines = cv2.HoughLinesP(edges, 1, numpy.pi / 180, 30, minLineLength=r_w*0.7, maxLineGap=r_w*0.2)
         if not lines is None:
             # const: uncomment for debug
             for x1, y1, x2, y2 in lines[0]:
