@@ -1,15 +1,23 @@
+from argparse import ArgumentParser
+from glob import glob
+import math
 import os
 import os.path
 import shutil
-import sys
+
 import cv2
-import math
-import numpy as np
-from glob import glob
 import exifread
 from jinja2 import FileSystemLoader, Environment
+import numpy as np
+
 from features import GeometryFeatures, ColourFeatures
 
+
+parser = ArgumentParser()
+parser.add_argument('fnames', type=str, help='Input files glob.',
+    nargs='?', default="../src/puzzle_small.tif")
+parser.add_argument('out_format', type=str, help='Output format.',
+    nargs='?', default="png")
 
 def convert_poly_to_string(poly):
     # Helper to convert openCV contour to a string with coordinates
@@ -55,6 +63,8 @@ class Sheet(object):
                 self.resulting_contours.append(cnt_features)
 
     def determine_dpi(self):
+        # Note: this is inconsistent for images with larger y dimension: if they
+        # have exif, dpi is returned for (x, y), otherwise it's (y, x).
         def parse_resolution(val):
             x = map(int, map(str.strip, str(val).split("/")))
             if len(x) == 1:
@@ -104,13 +114,13 @@ class Sheet(object):
         return fname
 
     def replace_scanner_background(self, img):
-        # Here we are trying to find scanner background
-        # (gray borders around colored sheet where shreds are glued)
+        # Method returns a mask describing detected scanner background
+        # (gray borders around colored sheet where shreds are glued).
         # Problem here is that colored sheet might have borders of different
         # sizes on different sides of it and we don't know the color of the
         # sheet.
-        # Also sheets isn't always has perfectly straight edges or rotated
-        # slightly against edges of the scanner
+        # Also sheets don't always have perfectly straight edges or are slightly
+        # rotated against edges of the scanner.
         # Idea is relatively simple:
 
         # Convert image to LAB and grab A and B channels.
@@ -121,12 +131,14 @@ class Sheet(object):
             fimg = cv2.copyMakeBorder(fimg, 5, 5, 5, 5, cv2.BORDER_CONSTANT,
                                       value=border)
 
+            # Flood fill supposed background with white (255).
             if aggressive:
                 cv2.floodFill(fimg, None, (10, 10), 255, 1, 1)
             else:
                 cv2.floodFill(fimg, None, (10, 10), 255, 2, 2,
                               cv2.FLOODFILL_FIXED_RANGE)
 
+            # Binarize image into white background and black everything else.
             _, fimg = cv2.threshold(fimg, 254, 255, cv2.THRESH_BINARY)
 
             hist = cv2.calcHist([fimg], [0], None, [2], [0, 256])
@@ -140,13 +152,14 @@ class Sheet(object):
         ]
 
         # And then try to add a border of predefined color around each channel
-        # and flood fill scanner scanner background starting from most
+        # and flood fill scanner background starting from most
         # aggressive flood fill settings to least aggressive.
         for i, opt in enumerate(options):
             fimg, hist = try_method(*opt)
             # First setting that doesn't flood that doesn't hurt colored sheet
             # too badly wins.
-            if hist[1] < (hist[0] + hist[1]) * 0.2:
+            bg_ratio = hist[1] / sum(hist)
+            if bg_ratio < 0.2:
                 break
 
         # Then we dilate it a bit.
@@ -384,8 +397,11 @@ class Sheet(object):
 
 
 if __name__ == '__main__':
-    fnames = "../src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
-    out_format = "png" if len(sys.argv) < 2 else sys.argv[2]
+    args = parser.parse_args()
+
+    fnames = args.fnames
+    out_format = args.out_format
+
     out_dir = "../out"
 
     static_dir = os.path.join(out_dir, "static")
