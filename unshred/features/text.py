@@ -16,11 +16,17 @@ import base
 
 DEBUG = True
 
+# Minimum number of detected text lines. 
+# If numer of lines recognized are below this value - the result is undefined
+MIN_LINES_FOR_RESULT = 3  
+
 # Magic values
-MAGIC_COLOR_THREASHOLD = 10
+MAGIC_COLOR_THRESHOLD = 10
 MAGIC_LINE_THRESHOLD = 10
-MAGIC_SECTIONS_THREASHOLD = 64
-MAGIN_GROUP_THREASHOLD = 5
+MAGIC_SECTIONS_THRESHOLD = 64
+
+MAGIN_GROUP_VALUE_THRESHOLD = 0.3
+MAGIC_GROUP_LEN_THRESHOLD = 5
 
 class TextFeatures(base.AbstractShredFeature):
     """ 
@@ -65,7 +71,7 @@ class TextFeatures(base.AbstractShredFeature):
         """
         result = []
         for i in xrange(1, len(values) - 1):
-            result.append((values[i + 1] - values[i - 1]) / 2)
+            result.append((values[i + 1] - values[i - 1]) / 2.0)
 
         return result
 
@@ -90,31 +96,28 @@ class TextFeatures(base.AbstractShredFeature):
 
         current_section = []
         is_in_section = False
-        spacing = []
+        spacing_len = 0
         position = 0
 
-        for i in xrange(len(values)):
+        for i, value in enumerate(values):
 
-            value = values[i]
+            if value > MAGIC_SECTIONS_THRESHOLD:
 
-            if value > MAGIC_SECTIONS_THREASHOLD:
-
-                if is_in_section == False:
-                    sections.append({'len' : -len(spacing), 'value' : 0, 'pos': i - len(spacing)})
+                if not is_in_section:
+                    sections.append({'len' : -spacing_len, 'value' : 0, 'pos': i - spacing_len})
                     is_in_section = True
-                    spacing = []
+                    spacing_len = 0
 
                 current_section.append(value)
             else:
 
-                if is_in_section == True:
+                if is_in_section:
                     is_in_section = False;
                     sections.append({ 'len' : len(current_section), 'value' : sum(current_section), 'pos' : i - len(current_section)})
                     current_section = []
 
-                spacing.append(' ')
+                spacing_len += 1
 
-        
         return sections     
 
     def get_histogram_for_angle(self, image, angle):
@@ -131,64 +134,67 @@ class TextFeatures(base.AbstractShredFeature):
                 list of values. Each value is a sum of inverted pixel's for the corresponding row
         """
 
-        total_lines = 0
         copy = image.rotate(angle, Image.BILINEAR, True)
 
-        x = 0
-        y = 0
-
-        line_data = 0
-
         line_histogram = []
+                
+        for i in xrange(copy.size[1]):
+            line = copy.crop( (0, i, copy.size[0], i + 1))
 
-        for data in copy.getdata():
+            value = 0
 
-            if data[0] < MAGIC_COLOR_THREASHOLD and data[3] == 255:
-                line_data += 255 - data[0]
-
-            x += 1
-            
-            if x >= copy.size[0]:
-                if line_data > MAGIC_LINE_THRESHOLD:
-                    total_lines += 1
-
-                line_histogram.append(line_data)
-
-                line_data = 0
-
-                x = 0
-                y += 1
-
+            for pixel in line.getdata():
+                if pixel[0] < MAGIC_COLOR_THRESHOLD and pixel[1] == 255:
+                    value += 255 - pixel[0]
+                
+            line_histogram.append(value)           
+                       
         return line_histogram
+
+    def group_section_below_threshold(self, section, group_threshold):
+        if section['len'] > 0 and section['value'] < group_threshold:
+            return True
+        
+        if section['len'] <= 0 and section['len'] > - MAGIC_GROUP_LEN_THRESHOLD:
+            return True
+
+        return False
 
     def group_sections(self, sections):
         """ Groups adjacent sections which are devided by only few pixels.
         """        
         finished = False
 
+        section_avg_value = 0
+        positive_sections = [s['value'] for s in sections if s['len'] > 0]
+
+        if len(positive_sections) > 0:
+            section_avg_value = sum( positive_sections ) / float(len(positive_sections))
+
+        group_threshold = section_avg_value * MAGIN_GROUP_VALUE_THRESHOLD
+
         while not finished:
 
             finished = True
             for i in xrange(1, len(sections) - 1):
-                if sections[i]['len'] < 0 and abs(sections[i]['len']) < MAGIN_GROUP_THREASHOLD:
+                if self.group_section_below_threshold(sections[i], group_threshold):
                     sections[i-1]['len'] += sections[i+1]['len'] + sections[i]['len']
                     sections[i-1]['value'] += sections[i+1]['value']
 
                     sections[i:i+2] = []
                     finished = False
-                    break        
-
+                    break
 
         if len(sections) == 0:
             return
 
-        if abs(sections[0]['len']) < MAGIN_GROUP_THREASHOLD:
+        if self.group_section_below_threshold(sections[0], group_threshold):
             sections[0:1] = []
 
         if len(sections) == 0:
             return
 
-        if abs(sections[-1]['len']) < MAGIN_GROUP_THREASHOLD:
+        if self.group_section_below_threshold(sections[-1], group_threshold):
             sections[-1:] = []
 
     def log_format_sections(self, sections):
@@ -200,6 +206,13 @@ class TextFeatures(base.AbstractShredFeature):
             data.append("%s (%s)" % (section['len'], section['value']))
 
         return ", ".join(data)
+
+    def get_derivative_coef(self, histogram):
+        """ Calculates the square sum of derivative from histogram
+            This can be used to measure "sharpness" of the histogram
+        """
+        derivative = self.get_derivative(histogram)
+        return sum(map(lambda x: x*x, derivative))
 
     def get_rotation_info(self, image, angle):
         """ 
@@ -227,7 +240,6 @@ class TextFeatures(base.AbstractShredFeature):
         """
 
         diagram = self.get_histogram_for_angle(image, angle)
-        derivative = self.get_derivative(diagram)
         sections = self.get_sections(diagram)        
 
         self.group_sections(sections)            
@@ -245,29 +257,16 @@ class TextFeatures(base.AbstractShredFeature):
             # get average section size
             section_avg_value = sum( [s['value'] for s in sections] ) / float(len(sections))
 
-            full_sections = [s for s in sections if s['value'] > 0.5*section_avg_value]
+            full_sections = [s for s in sections if s['value'] > 0.3 * section_avg_value]
             normalized_sections_count = len(full_sections)
 
             sections_heights = sum( map(lambda x: x['len'], full_sections) )
-            
-        positive = [x for x in derivative if x > 0]
-        negative = [x for x in derivative if x < 0]
-
-        positive.sort()
-        positive.reverse()
-
-        negative.sort()
-            
-        positive_sum = sum(positive[:5])
-        nagative_sum = sum(negative[:5])
 
         return {'angle' : angle, 
                 'nsc': normalized_sections_count,
                 'heights': sections_heights,
-                'derivative_pos' : positive_sum, 
-                'derivative_neg' : nagative_sum, 
-                'full_sections': full_sections,
-                'sections': sections}
+                'derivative': self.get_derivative_coef(diagram),
+                'full_sections': full_sections}
 
     def sort_result(self, result):
         """ Sort result by important parameters
@@ -286,10 +285,10 @@ class TextFeatures(base.AbstractShredFeature):
             return b['nsc'] - a['nsc']
                 
         def sort_fun(a, b):
-            if len(b['sections']) == len(a['sections']):
-                return b['derivative_pos'] - a['derivative_pos']
+            if b['nsc'] == a['nsc']:
+                return b['derivative'] - a['derivative']
             
-            return len(b['sections']) - len(a['sections'])
+            return b['nsc'] - a['nsc']
 
         result.sort( sort_fun2 )
 
@@ -322,8 +321,7 @@ class TextFeatures(base.AbstractShredFeature):
             print "Processing file: %s" % (name)
 
         image = Image.fromarray(cv2.cvtColor(shred, cv2.COLOR_BGRA2RGBA))
-
-        image = self.desaturate(image)
+        image = image.convert("LA")
 
         image = self.enhance(image, ImageEnhance.Brightness, 1.5);
         image = self.enhance(image, ImageEnhance.Contrast, 3);
@@ -337,15 +335,14 @@ class TextFeatures(base.AbstractShredFeature):
             result = image.rotate(resulting_angle, Image.BILINEAR, True)            
             result.save("results/%s" % (name))
         
-        return {'text_angle' : resulting_angle, 'text_sections' : [{'pos' : s['pos'], 'length' : s['len']} for s in top_result['full_sections']]}
-
+        if top_result['nsc'] >= MIN_LINES_FOR_RESULT:
+            return {'text_angle' : resulting_angle, 'text_sections' : [{'pos' : s['pos'], 'length' : s['len']} for s in top_result['full_sections']]}
+        else:
+            return {'text_angle' : "undefined" }
     
 if __name__ == '__main__':
 
-    IMAGE_PATH = "C:\\Development\\shreder\\test-rotation\\direct\\img"
-    FILE_NAME = "11.png"
-    
-    for full_name in glob.glob("%s\\*.png" % (IMAGE_PATH)):
+    def process_shred(full_name):
 
         features = TextFeatures(None)
         cv_image = cv2.imread(full_name, -1)
@@ -354,8 +351,27 @@ if __name__ == '__main__':
 
         result = features.get_info(cv_image, None, file_name)
 
+        if result == None:
+            return
+
         with open("results/%s.json" %(file_name), "wt") as f_info:
             f_info.write( json.dumps(result, sort_keys=True,
                             indent=4, separators=(',', ': ')) )
 
-#    rotate("img/74.png")
+    if len(sys.argv) < 2:
+        print "Error: Please specify path or file"
+        sys.exit(255)
+
+    path = sys.argv[1]
+
+    if os.path.isfile(path):
+        process_shred(path)
+    else:
+
+        for full_name in glob.glob("%s\\*.png" % (path)): 
+
+            if full_name.count("_ctx") > 0 or full_name.count("_mask") > 0:
+                continue
+
+            process_shred(full_name)
+    
