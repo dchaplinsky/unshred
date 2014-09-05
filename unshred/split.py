@@ -58,8 +58,11 @@ class SheetIO(object):
             tags = exifread.process_file(f)
 
         if "Image XResolution" in tags and "Image YResolution" in tags:
-            return (parse_resolution(tags["Image XResolution"]),
-                    parse_resolution(tags["Image YResolution"]))
+            try:
+                return (parse_resolution(tags["Image XResolution"]),
+                        parse_resolution(tags["Image YResolution"]))
+            except ValueError:
+                return None
         return None
 
     def save_image(self, fname, img, format=None):

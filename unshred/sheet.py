@@ -33,7 +33,7 @@ class Sheet(object):
             orig_image: cv.Mat instance with the original sheet image.
             dpi: optional (x resolution, y resolution) tuple or None.
                 If set to None, will try to guess dpi.
-            save_iamge: A callback to save debug images with args (name, img)
+            save_image: A callback to save debug images with args (name, img)
         """
 
         self._shreds = None
@@ -44,7 +44,6 @@ class Sheet(object):
         self._fg_mask = None
         self._shreds = None
 
-        self.dpi = dpi
         if dpi is None:
             self.res_x, self.res_y = self._guess_dpi()
         else:
@@ -326,16 +325,16 @@ class Sheet(object):
         if tags_suggestions:
             print(name, tags_suggestions)
 
-        return Shred(**{
-            "features": base_features,
-            "contour": c,
-            "img_roi": img_roi,
-            "name": name,
-            "piece_fname": piece_fname,
-            "features_fname": features_fname,
-            "piece_in_context_fname": piece_in_context,
-            "simplified_contour": simplified_contour,
-            "sheet": sheet_name,
-            "tags_suggestions": tags_suggestions,
-        })
+        return Shred(
+            contour=c,
+            features=base_features,
+            features_fname=features_fname,
+            img_roi=img_roi,
+            name=name,
+            piece_fname=piece_fname,
+            piece_in_context_fname=piece_in_context,
+            sheet=sheet_name,
+            simplified_contour=simplified_contour,
+            tags_suggestions=tags_suggestions,
+        )
 
