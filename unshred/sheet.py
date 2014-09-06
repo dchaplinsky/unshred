@@ -90,7 +90,7 @@ class Sheet(object):
 
         return int(round(xres, -2)), int(round(yres, -2))
 
-    def _detect_scanner_background(self, img):
+    def _detect_scanner_background(self):
         # Method returns a mask describing detected scanner background
         # (gray borders around colored sheet where shreds are glued).
         # Problem here is that colored sheet might have borders of different
@@ -101,7 +101,7 @@ class Sheet(object):
         # Idea is relatively simple:
 
         # Convert image to LAB and grab A and B channels.
-        fimg = cv2.cvtColor(img, cv2.cv.CV_BGR2Lab)
+        fimg = cv2.cvtColor(self.orig_img, cv2.cv.CV_BGR2Lab)
         _, a_channel, b_channel = cv2.split(fimg)
 
         def try_method(fimg, border, aggressive=True):
@@ -169,7 +169,7 @@ class Sheet(object):
         res = None
 
         # Here we calculate mask to separate background of the scanner
-        scanner_bg = self._detect_scanner_background(self.orig_img)
+        scanner_bg = self._detect_scanner_background()
 
         # And here we are trying to check different ranges for different
         # background to find the winner.
