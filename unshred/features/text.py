@@ -17,15 +17,16 @@ import base
 
 DEBUG = True
 
+# Shred will be rotated and evaluated for every angle from this range
+ANGLES_RANGE = xrange(-45, 45)
+
 # Minimum number of detected text lines.
 # If number of lines recognized are below this value - the result is undefined
 MIN_LINES_FOR_RESULT = 3
 
 # Magic values
 MAGIC_COLOR_THRESHOLD = 10
-MAGIC_LINE_THRESHOLD = 10
 MAGIC_SECTIONS_THRESHOLD = 64
-
 MAGIC_GROUP_VALUE_THRESHOLD = 0.3
 MAGIC_GROUP_LEN_THRESHOLD = 5
 
@@ -123,23 +124,23 @@ class TextFeatures(base.AbstractShredFeature):
             Returns:
                 list of values. Each value is a sum of inverted pixel's for the corresponding row
         """
-
         copy = image.rotate(angle, Image.BILINEAR, True)
+        
+        img = np.fromstring(copy.tostring(), dtype=np.uint8).reshape(copy.size[1], copy.size[0], 2)    
+   
+        alpha = img[:, :, 1]        
+        res = img[:, :, 0]
+        
+        res[res >= MAGIC_COLOR_THRESHOLD] = 255
+        res[alpha < 255] = 255
+        res = 255 - res
 
-        line_histogram = []
+        # Python cv2.reduce doesn't work correctly with int matrices.
+        data_for_reduce = res.astype(np.float)
+        histogram = cv2.reduce(data_for_reduce, 1, cv2.cv.CV_REDUCE_SUM)[:, 0]
 
-        for i in xrange(copy.size[1]):
-            line = copy.crop((0, i, copy.size[0], i + 1))
-            value = 0
-
-            for pixel in line.getdata():
-                if pixel[0] < MAGIC_COLOR_THRESHOLD and pixel[1] == 255:
-                    value += 255 - pixel[0]
-
-            line_histogram.append(value)
-
-        return line_histogram
-
+        return histogram
+    
     def group_section_below_threshold(self, section, group_threshold):
         if section.len > 0 and section.value < group_threshold:
             return True
@@ -158,7 +159,7 @@ class TextFeatures(base.AbstractShredFeature):
         positive_sections = [s.value for s in sections if s.len > 0]
 
         if positive_sections:
-            section_avg_value = sum(positive_sections) / float(len(positive_sections))
+            section_avg_value = np.average(positive_sections)
 
         group_threshold = section_avg_value * MAGIC_GROUP_VALUE_THRESHOLD
 
@@ -277,16 +278,16 @@ class TextFeatures(base.AbstractShredFeature):
                 image: grayscale python image
 
             Returns:
-                list of dicts with info for every angle tested
+                list of RotationInfo instances with info for every angle tested
         """
 
         result = []
-        for angle in xrange(-45, 45):
+        for angle in ANGLES_RANGE:
 
             if DEBUG: sys.stdout.write(".")
 
             rotation_info = self.get_rotation_info(image, angle)
-            result.append(rotation_info) # diagram, derivative
+            result.append(rotation_info)
 
         if DEBUG: sys.stdout.write("\n")
 
