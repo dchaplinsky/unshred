@@ -18,9 +18,6 @@ from original image.
 The algorith assumes dark foreground on light background.
 
 """
-import argparse
-import sys
-
 import cv2
 import numpy as np
 
@@ -99,6 +96,8 @@ def threshold(image, block_size=DEFAULT_BLOCKSIZE, mask=None):
 
 
 if __name__ == '__main__':
+    import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument('input', type=str, help='Input file name.',
                         nargs='?', default="11.jpg")
@@ -109,9 +108,6 @@ if __name__ == '__main__':
 
     fname = args.input
     outfile = args.output
-
-    fname = "11.jpg" if len(sys.argv) < 2 else sys.argv[1]
-    outfile = "out.png" if len(sys.argv) < 3 else sys.argv[2]
 
     image = cv2.imread(fname, cv2.CV_LOAD_IMAGE_UNCHANGED)
     result = threshold(image)
