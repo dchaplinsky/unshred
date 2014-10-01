@@ -1,6 +1,9 @@
 unshred
 =======
-Experiments on [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchallenge/) tasks using Python &amp; OpenCV.
+Experiments on [Kurchenko Grand-Prix](http://www.bbc.com/news/magazine-26835441) tasks using Python &amp; OpenCV.
+It was also influenced by [Darpa Shredder Challenge](http://archive.darpa.mil/shredderchallenge/) on early stages. It is a companion project for [unshred-tag](https://github.com/dchaplinsky/unshred-tag), web UI that allows to process individual shreds using power of a crowdsourcing
+
+### [Project plan](https://hackpad.com/Project-Description-8OJGZdY7nJT)
 
 ### [Demo](http://dchaplinsky.github.io/unshred/)
 
