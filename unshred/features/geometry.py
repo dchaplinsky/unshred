@@ -21,8 +21,8 @@ class GeometryFeatures(AbstractShredFeature):
         if solidity < 0.75:
             tags.append("Suspicious shape")
 
-        width_mm = float(r_w) / self.sheet.res_x * 25.4
-        height_mm = float(r_h) / self.sheet.res_y * 25.4
+        width_mm = self.sheet.px_to_mm(r_w)
+        height_mm = self.sheet.px_to_mm(r_h)
         ratio = shred.shape[0] / float(shred.shape[1])
 
         if width_mm > 6:

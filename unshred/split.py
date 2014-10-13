@@ -23,10 +23,23 @@ env.filters["convert_poly_to_string"] = convert_poly_to_string
 class Sheet(object):
     backgrounds = [
         # DARPA SHRED task #1
-        [[np.array([30, 190, 180]), np.array([180, 255, 255])],
-         [np.array([0, 240, 170]), np.array([50, 255, 255])]],
+        [
+            [np.array([30, 190, 180]), np.array([180, 255, 255])],
+            [np.array([0, 240, 170]), np.array([50, 255, 255])]
+        ],
         # Pink
         [[np.array([160, 50, 210]), np.array([200, 150, 255])]],
+
+        # Denys $100 paper background
+        [
+            [np.array([0, 100, 200]), np.array([20, 255, 255])],
+            [np.array([140, 120, 200]), np.array([250, 255, 255])],
+        ],
+
+        # AB's brown paper
+        [
+            [np.array([0, 70, 120]), np.array([30, 140, 200])],
+        ]
     ]
 
     def __init__(self, fname, sheet_name, feature_extractors,
@@ -85,6 +98,9 @@ class Sheet(object):
             raise ValueError
 
         return int(round(xres, -2)), int(round(yres, -2))
+
+    def px_to_mm(self, px):
+        return float(px) / self.res_x * 25.4
 
     def save_image(self, fname, img, format=None):
         full_out_dir, fname = os.path.split(
@@ -185,8 +201,7 @@ class Sheet(object):
         # And here we are trying to check different ranges for different
         # background to find the winner.
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-        cv2.imwrite("foobar.jpg", hsv)
+        cv2.imwrite("hsv.png", hsv)
 
         for bg in self.backgrounds:
             mask = np.zeros(img.shape[:2], np.uint8)
@@ -206,6 +221,7 @@ class Sheet(object):
         # then we remove scanner background
         res = cv2.bitwise_or(scanner_bg, res)
         res = cv2.morphologyEx(res, cv2.MORPH_OPEN, np.ones((3, 7), np.uint8))
+        cv2.imwrite("mask.png", res)
 
         return cv2.bitwise_not(res)
 
@@ -240,10 +256,15 @@ class Sheet(object):
         epsilon = 0.01 * cv2.arcLength(c, True)
         simplified_contour = cv2.approxPolyDP(c, epsilon, True)
 
-        area = cv2.contourArea(c)
         # filter out too small fragments
-        if r_w <= 20 or r_h <= 20 or area < 500:
-            print("Skipping piece #%s as too small" % name)
+        if self.px_to_mm(r_w) <= 3 or self.px_to_mm(r_h) <= 3:
+            print("Skipping piece #%s as too small (%spx x %s px)" % (
+                name, r_w, r_h))
+            return None
+
+        if self.px_to_mm(r_w) >= 100 and self.px_to_mm(r_h) >= 100:
+            print("Skipping piece #%s as too big (%spx x %s px)" % (
+                name, r_w, r_h))
             return None
 
         # position of rect of min area.
@@ -254,6 +275,10 @@ class Sheet(object):
         if bbox[0] > bbox[1]:
             angle += 90
             bbox = (bbox[1], bbox[0])
+
+        if bbox[1] / float(bbox[0]) > 70:
+            print("Skipping piece #%s as too too long and narrow" % name)
+            return None
 
         # Coords of region of interest using which we should crop piece after
         # rotation
@@ -385,7 +410,7 @@ class Sheet(object):
 
 if __name__ == '__main__':
     fnames = "../src/puzzle_small.tif" if len(sys.argv) == 1 else sys.argv[1]
-    out_format = "png" if len(sys.argv) < 2 else sys.argv[2]
+    out_format = "png" if len(sys.argv) <= 2 else sys.argv[2]
     out_dir = "../out"
 
     static_dir = os.path.join(out_dir, "static")
