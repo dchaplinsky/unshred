@@ -9,9 +9,6 @@ import numpy as np
 
 import Image
 import ImageEnhance
-import ImageFilter
-import ImageDraw
-import ImageOps
 
 import base
 
@@ -24,11 +21,26 @@ ANGLES_RANGE = xrange(-45, 45)
 # If number of lines recognized are below this value - the result is undefined
 MIN_LINES_FOR_RESULT = 3
 
-# Magic values
+# The following magic values are empirical,
+# they most likely will be changed (or removed) in future
+# while tuning the algorithm.
+
+# All pixels above this value (after converting to grayscale mode)
+# will be discarded (i.e. equal 255)
 MAGIC_COLOR_THRESHOLD = 10
+
+# All values in histogram below this magic will be equal to zero
 MAGIC_SECTIONS_THRESHOLD = 64
+
+# All sections with length (height of text)
+# below this magic multiple "average height" of text sections
+# will be discarded
 MAGIC_GROUP_VALUE_THRESHOLD = 0.3
+
+# All empty sections (without text) with length below
+# this value will be discarded
 MAGIC_GROUP_LEN_THRESHOLD = 5
+
 
 RotationInfo = collections.namedtuple('RotationInfo', ['angle', 'nsc',
                                                        'heights', 'derivative',
@@ -36,31 +48,32 @@ RotationInfo = collections.namedtuple('RotationInfo', ['angle', 'nsc',
 
 Section = collections.namedtuple('Section', ['pos', 'len', 'value'])
 
+
 class TextFeatures(base.AbstractShredFeature):
     """
-        Tries to guess the following features of the shred:
+    Tries to guess the following features of the shred:
 
-            * text direction (in degrees) relative to original shred
-            * number of text lines
-            * positions of text lines (after rotation) and their heights
+        * text direction (in degrees) relative to original shred
+        * number of text lines
+        * positions of text lines (after rotation) and their heights
 
-        Algorithm is pretty straightforward and slow:
+    Algorithm is pretty straightforward and slow:
 
-            1. increase shred contrast
-            2. rotate image from -45 to +45 degrees and compute
-               image line histogram (sum of inverted pixels for every line)
-            3. analyze histogram for every angle to compute resulting coefficients
-            3. sort computed parameters and choose the best match
+        1. increase shred contrast
+        2. rotate image from -45 to +45 degrees and compute
+           image line histogram (sum of inverted pixels for every line)
+        3. analyze histogram for every angle to compute resulting coefficients
+        3. sort computed parameters and choose the best match
 
-        Currently, the best match is selected by angle, at which
-        maximum number of text lines is found with minimum heights for each line.
+    Currently, the best match is selected by angle, at which
+    maximum number of text lines is found with minimum heights for each line.
 
-        TODO:
-              * better way to increase contrast of the image (based on histogram)
-              * include and analyze additional parameters of rotated shred, like
-                contrast of horizontal lines histogram, connect with lines detector
-                for more accurate results, etc..
-              * improve performance by using OpenCV/numpy for computation
+    TODO:
+          * better way to increase contrast of the image (based on histogram)
+          * include and analyze additional parameters of rotated shred, like
+            contrast of horizontal lines histogram, connect with lines detector
+            for more accurate results, etc..
+          * improve performance by using OpenCV/numpy for computation
     """
 
     def enhance(self, image, enhancer_class, value):
@@ -95,7 +108,11 @@ class TextFeatures(base.AbstractShredFeature):
             if value > MAGIC_SECTIONS_THRESHOLD:
 
                 if not is_in_section:
-                    sections.append(Section(len=-spacing_len, value=0, pos=i - spacing_len))
+                    sections.append(
+                        Section(len=-spacing_len,
+                                value=0,
+                                pos=i - spacing_len))
+
                     is_in_section = True
                     spacing_len = 0
 
@@ -104,7 +121,10 @@ class TextFeatures(base.AbstractShredFeature):
 
                 if is_in_section:
                     is_in_section = False
-                    sections.append(Section(len=len(current_section), value=sum(current_section), pos=i - len(current_section)))
+                    sections.append(
+                        Section(len=len(current_section),
+                                value=sum(current_section),
+                                pos=i - len(current_section)))
                     current_section = []
 
                 spacing_len += 1
@@ -122,15 +142,18 @@ class TextFeatures(base.AbstractShredFeature):
                 angle: rotation angle in degrees
 
             Returns:
-                list of values. Each value is a sum of inverted pixel's for the corresponding row
+                list of values. Each value is a sum of inverted pixel's
+                for the corresponding row
         """
         copy = image.rotate(angle, Image.BILINEAR, True)
-        
-        img = np.fromstring(copy.tostring(), dtype=np.uint8).reshape(copy.size[1], copy.size[0], 2)    
-   
-        alpha = img[:, :, 1]        
+
+        img = np.fromstring(copy.tostring(),
+                            dtype=np.uint8).reshape(copy.size[1],
+                                                    copy.size[0], 2)
+
+        alpha = img[:, :, 1]
         res = img[:, :, 0]
-        
+
         res[res >= MAGIC_COLOR_THRESHOLD] = 255
         res[alpha < 255] = 255
         res = 255 - res
@@ -140,7 +163,7 @@ class TextFeatures(base.AbstractShredFeature):
         histogram = cv2.reduce(data_for_reduce, 1, cv2.cv.CV_REDUCE_SUM)[:, 0]
 
         return histogram
-    
+
     def group_section_below_threshold(self, section, group_threshold):
         if section.len > 0 and section.value < group_threshold:
             return True
@@ -150,8 +173,20 @@ class TextFeatures(base.AbstractShredFeature):
 
         return False
 
+    def join_sections(self, sections, num):
+        """ Joins three sections into a single one.
+            Summing up sections length and values
+        """
+        return Section(len=sum([sections[num - 1].len,
+                                sections[num].len,
+                                sections[num + 1].len]),
+                       pos=sections[num - 1].pos,
+                       value=sum([sections[num - 1].value,
+                                  sections[num].value,
+                                  sections[num + 1].value]))
+
     def group_sections(self, sections):
-        """ Groups adjacent sections which are devided by only few pixels.
+        """ Groups adjacent sections which are divided by only few pixels.
         """
         finished = False
 
@@ -164,14 +199,13 @@ class TextFeatures(base.AbstractShredFeature):
         group_threshold = section_avg_value * MAGIC_GROUP_VALUE_THRESHOLD
 
         while not finished:
-
             finished = True
             for i in xrange(1, len(sections) - 1):
-                if self.group_section_below_threshold(sections[i], group_threshold):
-                    sections[i-1] = Section(len=sections[i-1].len + sections[i].len + sections[i+1].len,
-                                            pos=sections[i-1].pos,
-                                            value=sections[i-1].value + sections[i].value + sections[i+1].value)
-                    sections[i:i+2] = []
+                if self.group_section_below_threshold(sections[i],
+                                                      group_threshold):
+                    self.join_sections(sections, i)
+                    sections[i - 1] = self.join_sections(sections, i)
+                    sections[i:i + 2] = []
                     finished = False
                     break
 
@@ -201,31 +235,33 @@ class TextFeatures(base.AbstractShredFeature):
             This can be used to measure "sharpness" of the histogram
         """
         derivative = np.gradient(histogram)
-        return sum([x*x for x in derivative])
+        return sum([x * x for x in derivative])
 
     def get_rotation_info(self, image, angle):
         """
-            Rotates image and compute resulting coefficients for the specified angle
+        Rotates image and compute resulting coefficients
+        for the specified angle
 
-            Args:
-                image: grayscale python image
-                angle: angle for which to rotate an image
+        Args:
+            image: grayscale python image
+            angle: angle for which to rotate an image
 
-            Returns:
+        Returns:
 
-                dictionary with values for the specified angle
+            dictionary with values for the specified angle
 
-                Coefficients currently computed:
-                    nsc (Normalized Sections Count) - number of text lines,
-                         without those lines, which have very little pixels in them
+            Coefficients currently computed:
+                nsc (Normalized Sections Count) - number of text lines,
+                     without those lines, which have very
+                     little pixels in them
 
-                    heights - sum of heights of lines
+                heights - sum of heights of lines
 
-                Additional lists returned (currently used only for debug and experiments):
-                    derivative_pos: list of positive derivatives values for histogram
-                    derivative_neg: list of negative derivatives values for histogram
-                    full_sections:  list of sections with enough data for analysis
-                    sections:       list of all sections
+            Additional lists returned (currently used for debug only):
+                derivative_pos: list of positive derivatives for histogram
+                derivative_neg: list of negative derivatives for histogram
+                full_sections:  list of sections with enough data for analysis
+                sections:       list of all sections
         """
 
         diagram = self.get_histogram_for_angle(image, angle)
@@ -242,9 +278,13 @@ class TextFeatures(base.AbstractShredFeature):
 
         if len(sections) > 0:
             # get average section size
-            section_avg_value = sum([s.value for s in sections]) / float(len(sections))
+            section_avg_value = (sum([s.value for s in sections])
+                                 / float(len(sections)))
 
-            full_sections = [s for s in sections if s.value > MAGIC_GROUP_VALUE_THRESHOLD * section_avg_value]
+            full_threshold = MAGIC_GROUP_VALUE_THRESHOLD * section_avg_value
+            full_sections = [s for s in sections
+                             if s.value > full_threshold]
+
             normalized_sections_count = len(full_sections)
 
             sections_heights = sum(map(lambda s: s.len, full_sections))
@@ -284,12 +324,14 @@ class TextFeatures(base.AbstractShredFeature):
         result = []
         for angle in ANGLES_RANGE:
 
-            if DEBUG: sys.stdout.write(".")
+            if DEBUG:
+                sys.stdout.write(".")
 
             rotation_info = self.get_rotation_info(image, angle)
             result.append(rotation_info)
 
-        if DEBUG: sys.stdout.write("\n")
+        if DEBUG:
+            sys.stdout.write("\n")
 
         self.sort_result(result)
 
@@ -316,10 +358,11 @@ class TextFeatures(base.AbstractShredFeature):
             result.save("results/%s" % (name))
 
         if top_result.nsc >= MIN_LINES_FOR_RESULT:
-            return {'text_angle' : resulting_angle,
-                    'text_sections' : [{'pos' : s.pos, 'length' : s.len} for s in top_result.full_sections]}
+            return {'text_angle': resulting_angle,
+                    'text_sections': [{'pos': s.pos, 'length': s.len}
+                                      for s in top_result.full_sections]}
         else:
-            return {'text_angle' : "undefined"}
+            return {'text_angle': "undefined"}
 
 if __name__ == '__main__':
 
@@ -332,10 +375,10 @@ if __name__ == '__main__':
 
         result = features.get_info(cv_image, None, file_name)
 
-        if result == None:
+        if result is None:
             return
 
-        with open("results/%s.json" %(file_name), "wt") as f_info:
+        with open("results/%s.json" % (file_name), "wt") as f_info:
             f_info.write(json.dumps(result, sort_keys=True,
                          indent=4, separators=(',', ': ')))
 
