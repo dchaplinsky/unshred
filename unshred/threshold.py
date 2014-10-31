@@ -88,7 +88,8 @@ def threshold(image, block_size=DEFAULT_BLOCKSIZE, mask=None):
         mask = np.zeros(image.shape[:2], dtype=np.uint8)
         mask[:] = 255
 
-    image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+    if len(image.shape) > 2 and image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
     res = _calc_block_mean_variance(image, mask, block_size)
     res = image.astype(np.float32) - res.astype(np.float32) + 255
     _, res = cv2.threshold(res, 215, 255, cv2.THRESH_BINARY)
