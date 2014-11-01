@@ -14,10 +14,13 @@ from sheet import Sheet
 
 
 parser = ArgumentParser()
-parser.add_argument('fnames', type=str, help='Input files glob.',
-    nargs='?', default="../src/puzzle_small.tif")
-parser.add_argument('out_format', type=str, help='Output format.',
-    nargs='?', default="png")
+parser.add_argument(
+    'fnames', type=str, help='Input files glob.', nargs='?',
+    default="../src/puzzle_small.tif")
+parser.add_argument(
+    'out_format', type=str, help='Output format.', nargs='?',
+    default="png")
+
 
 def convert_poly_to_string(poly):
     # Helper to convert openCV contour to a string with coordinates
@@ -42,7 +45,8 @@ class SheetIO(object):
         orig_img = cv2.imread(fname)
         self.sheet = Sheet(orig_img, dpi=self._dpi_from_exif(),
                            save_image=self.save_image)
-        self.feature_extractors = [feat(self.sheet) for feat in feature_extractors]
+        self.feature_extractors = [
+            feat(self.sheet) for feat in feature_extractors]
 
     def _dpi_from_exif(self):
         def parse_resolution(val):
@@ -123,7 +127,8 @@ class SheetIO(object):
         r = float(width) / self.sheet.orig_img.shape[1]
         dim = (width, int(self.sheet.orig_img.shape[0] * r))
 
-        resized = cv2.resize(self.sheet.orig_img, dim, interpolation=cv2.INTER_AREA)
+        resized = cv2.resize(self.sheet.orig_img, dim,
+                             interpolation=cv2.INTER_AREA)
         return self.save_image("thumb", resized)
 
     def get_shreds(self):
@@ -151,7 +156,8 @@ if __name__ == '__main__':
 
         print("Processing file %s" % fname)
         sheet = SheetIO(fname, sheet_name,
-                      [GeometryFeatures, ColourFeatures, LinesFeatures], out_dir, out_format)
+                        [GeometryFeatures, ColourFeatures, LinesFeatures],
+                        out_dir, out_format)
 
         sheet.export_results_as_html()
         sheets.append({
