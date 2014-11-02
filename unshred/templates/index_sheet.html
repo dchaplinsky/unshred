@@ -22,7 +22,7 @@
 {% block content %}
 {% for sheet in sheets %}
     <div class="thumb">
-        <a href="{{ sheet.name }}/index.html"><img src="{{ sheet.thumb|replace("out/", "") }}" alt="{{ sheet.name }}"></a>
+        <a href="{{ sheet.name }}/index.html"><img src="{{ sheet.thumb|replace("../out/", "") }}" alt="{{ sheet.name }}"></a>
         <a href="{{ sheet.name }}/index.html">
             Page "{{ sheet.name }}"
         </a>
