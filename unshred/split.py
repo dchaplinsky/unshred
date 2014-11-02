@@ -9,7 +9,7 @@ import exifread
 from jinja2 import FileSystemLoader, Environment
 import numpy as np
 
-from features import GeometryFeatures, ColourFeatures
+from features import GeometryFeatures, ColourFeatures, LinesFeatures
 from sheet import Sheet
 
 
@@ -155,7 +155,8 @@ if __name__ == '__main__':
         sheet_name = os.path.splitext(os.path.basename(fname))[0]
 
         print("Processing file %s" % fname)
-        sheet = SheetIO(fname, sheet_name, [GeometryFeatures, ColourFeatures],
+        sheet = SheetIO(fname, sheet_name,
+                        [GeometryFeatures, ColourFeatures, LinesFeatures],
                         out_dir, out_format)
 
         sheet.export_results_as_html()

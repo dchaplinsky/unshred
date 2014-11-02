@@ -1,2 +1,3 @@
-from .geometry import *
 from .colours import *
+from .geometry import *
+from .lines import *
