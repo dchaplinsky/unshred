@@ -8,7 +8,7 @@ It was also influenced by [Darpa Shredder Challenge](http://archive.darpa.mil/sh
 ### [Demo](http://dchaplinsky.github.io/unshred/)
 
 ### Installation
- * Install OpenCV using your favorite package manager or by following [instructions from openCV site](http://opencv.org/downloads.html). Make sure that you have 2.4.x. This code doesn't work with 2.3.x
+ * Install OpenCV using your favorite package manager or by following [instructions from openCV site](http://opencv.org/downloads.html). Make sure that you have 2.4.9. This code doesn't work with 2.3.x
  * [Install pip](http://pip.readthedocs.org/en/latest/installing.html#install-pip)
  * Checkout codebase from github.
  * Run ```pip install -r requirements.txt``` (if you are using virtualenv, make sure you've created your env with ```--system-site-packages``` option so you'll have an access to openCV bindings which are installed globally)
