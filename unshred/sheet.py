@@ -342,11 +342,14 @@ class Sheet(object):
         features_fname = self.save_image("pieces/%s_mask" % name, mask, "png")
 
         base_features = {
-            "angle": angle,
-            "pos_x": r_x,
-            "pos_y": r_y,
-            "pos_width": r_w,
-            "pos_height": r_h
+            # On_sheet_* features describe the min counding box on the sheet.
+            "on_sheet_x": r_x,
+            "on_sheet_y": r_y,
+            "on_sheet_width": r_w,
+            "on_sheet_height": r_h,
+            "on_sheet_angle": angle,
+            "width": img_roi.shape[1],
+            "height": img_roi.shape[0],
         }
 
         tags_suggestions = []

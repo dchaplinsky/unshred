@@ -109,7 +109,7 @@ class SheetIO(object):
         shreds = self.get_shreds()
         for c in shreds:
             # Slight pre-processing of the features of each piece
-            c.features["angle"] = "%8.1f&deg;" % c.features["angle"]
+            c.features["on_sheet_angle"] = "%8.1f&deg;" % c.features["on_sheet_angle"]
             c.features["ratio"] = "%8.2f" % c.features["ratio"]
             c.features["solidity"] = "%8.2f" % c.features["solidity"]
 
