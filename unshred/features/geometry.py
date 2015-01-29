@@ -15,18 +15,14 @@ class GeometryFeatures(AbstractShredFeature):
         # Also top and bottom points on the contour
         topmost = map(int, contour[contour[:, :, 1].argmin()][0])
         bottommost = map(int, contour[contour[:, :, 1].argmax()][0])
-        _, _, r_w, r_h = cv2.boundingRect(contour)
         tags = []
 
         if solidity < 0.75:
             tags.append("Suspicious shape")
 
-        width_mm = self.sheet.px_to_mm(r_w)
-        height_mm = self.sheet.px_to_mm(r_h)
+        width_mm = self.sheet.px_to_mm(shred.shape[0])
+        height_mm = self.sheet.px_to_mm(shred.shape[1])
         ratio = shred.shape[0] / float(shred.shape[1])
-
-        if width_mm > 6:
-            tags.append("Suspicious width")
 
         return {
             "area": area,
