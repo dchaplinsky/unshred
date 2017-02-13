@@ -8,10 +8,10 @@ It was also influenced by [Darpa Shredder Challenge](http://archive.darpa.mil/sh
 ### [Demo](http://dchaplinsky.github.io/unshred/)
 
 ### Installation
- * Install OpenCV using your favorite package manager or by following [instructions from openCV site](http://opencv.org/downloads.html). Make sure that you have 2.4.9. This code doesn't work with 2.3.x
  * [Install pip](http://pip.readthedocs.org/en/latest/installing.html#install-pip)
  * Checkout codebase from github.
- * Run ```pip install -r requirements.txt``` (if you are using virtualenv, make sure you've created your env with ```--system-site-packages``` option so you'll have an access to openCV bindings which are installed globally)
+ * Run ```pip install -r requirements.txt```
+ * ```pip install -e . && cd unshred```
  * Run it on test file: ```python split.py ../src/puzzle.tif```
  * If everything was ok it should create bunch of files in out/ dir, similar to those from the demo link above.
 
@@ -30,11 +30,9 @@ It was also influenced by [Darpa Shredder Challenge](http://archive.darpa.mil/sh
 Check features subdir for examples of feature detectors and interfaces they are using. If you have an idea or implementation of good features — contact me!
 
 ### Requirements
- * [NumPy 1.7.1](http://www.numpy.org/)
- * [OpenCV 2.4.9](http://opencv.org/)
+ * [NumPy 1.12.0](http://www.numpy.org/)
+ * [OpenCV 3.2.0.6](http://opencv.org/)
  * [Jinja 2](http://jinja.pocoo.org/)
-
-I've used OpenCV/NumPy from [homebrew](http://brew.sh/). I think any 2.* OpenCV version will work as well 
 
 ### Source files
 I've included cropped version of task #1 of Darpa Shredder Challenge for the reference. For original files please visit [their website](http://archive.darpa.mil/shredderchallenge/Download.html)
