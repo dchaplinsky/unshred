@@ -90,7 +90,7 @@ class Sheet(object):
         """
         if self._shreds is None:
             shreds = []
-            contours, _ = cv2.findContours(self._foreground_mask,
+            _, contours, _ = cv2.findContours(self._foreground_mask,
                                            cv2.RETR_EXTERNAL,
                                            cv2.CHAIN_APPROX_SIMPLE)
             for i, contour in enumerate(contours):
@@ -127,7 +127,7 @@ class Sheet(object):
         # Idea is relatively simple:
 
         # Convert image to LAB and grab A and B channels.
-        fimg = cv2.cvtColor(img, cv2.cv.CV_BGR2Lab)
+        fimg = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
         _, a_channel, b_channel = cv2.split(fimg)
 
         def try_method(fimg, border, aggressive=True):
@@ -171,9 +171,9 @@ class Sheet(object):
         fimg = fimg[5:-5, 5:-5]
 
         # Searching for a biggest outter contour
-        contours, _ = cv2.findContours(cv2.bitwise_not(fimg),
-                                       cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(cv2.bitwise_not(fimg),
+                                          cv2.RETR_EXTERNAL,
+                                          cv2.CHAIN_APPROX_SIMPLE)
         main_contour = np.array(map(cv2.contourArea, contours)).argmax()
 
         # build a convex hull for it
@@ -293,7 +293,7 @@ class Sheet(object):
 
         # A mask we use to show only piece we are currently working on
         piece_mask = np.zeros([height, width, 1], dtype=np.uint8)
-        cv2.drawContours(piece_mask, [c], -1, 255, cv2.cv.CV_FILLED)
+        cv2.drawContours(piece_mask, [c], -1, 255, cv2.FILLED)
 
         # apply mask to original image
         img_crp = self.orig_img[r_y:r_y + r_h, r_x:r_x + r_w]
@@ -306,7 +306,7 @@ class Sheet(object):
         img_roi = cv2.bitwise_and(img_crp, img_crp, mask=mask)
 
         # Add alpha layer and set it to the mask
-        img_roi = cv2.cvtColor(img_roi, cv2.cv.CV_BGR2BGRA)
+        img_roi = cv2.cvtColor(img_roi, cv2.COLOR_BGR2BGRA)
         img_roi[:, :, 3] = mask[:, :, 0]
 
         # Straighten it
@@ -331,8 +331,8 @@ class Sheet(object):
         # Get our mask/contour back after the trasnform
         _, _, _, mask = cv2.split(img_roi)
 
-        contours, _ = cv2.findContours(mask.copy(), cv2.RETR_TREE,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+        _, contours, _ = cv2.findContours(mask.copy(), cv2.RETR_TREE,
+                                          cv2.CHAIN_APPROX_SIMPLE)
 
         if len(contours) != 1:
             print("Piece #%s has strange contours after transform" % name)
